@@ -8,15 +8,15 @@ import {
     Views, 
     View, 
     EventProps, 
-    // DateHeaderProps, // Not currently used in the latest version of your code
+    DateHeaderProps, // Not currently used in the latest version of your code
     // DayLayoutAlgorithm, // You commented out its usage
     // DayLayoutFunction // You commented out its usage
 } from 'react-big-calendar';
-import format from 'date-fns/format';
-import parse from 'date-fns/parse';
-import startOfWeek from 'date-fns/startOfWeek';
-import getDay from 'date-fns/getDay';
-import enUS from 'date-fns/locale/en-US';
+import { format } from 'date-fns/format';
+import { parse } from 'date-fns/parse';
+import { startOfWeek } from 'date-fns/startOfWeek';
+import { getDay } from 'date-fns/getDay';
+import { enUS } from 'date-fns/locale/en-US';
 import { CalendarEvent } from '@/types/events';
 import { isSameDay, isWithinInterval } from 'date-fns';
 
@@ -197,11 +197,11 @@ export const CalendarView = ({
         components={{
           event: CustomEvent, // Use our view-aware CustomEvent
           month: {
-            dateCellWrapper: (props) => (
-              <CustomDateCellWrapper {...props} events={events} isSimpleMode={isSimpleMode} />
-            ),
+            //dateCellWrapper: (props) => (
+             // <CustomDateCellWrapper {...props} events={events} isSimpleMode={isSimpleMode} />
+            //),
           },
-          // No custom agenda.date or agenda.time, let RBC handle those with rowspan
+          
         }}
         eventPropGetter={eventPropGetter} // Use our view-aware eventPropGetter
         // dayLayoutAlgorithm={dayLayoutAlgorithm} // If you re-enable, ensure it's compatible

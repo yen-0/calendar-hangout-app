@@ -158,8 +158,8 @@ export const findCommonAvailability = (
   const participantIds = Object.keys(participants);
 
   for (const dr of dateRanges) {
-    let currentDay = startOfDay(new Date(dr.start)); // Ensure it's a new Date object
-    const dateRangeEndDay = startOfDay(new Date(dr.end)); // Ensure it's a new Date object
+    let currentDay = startOfDay(new Date(dr.start.toDate())); // Ensure it's a new Date object
+    const dateRangeEndDay = startOfDay(new Date(dr.end.toDate())); // Ensure it's a new Date object
 
     while (isBefore(currentDay, addMinutes(dateRangeEndDay, 1)) || isEqual(currentDay, dateRangeEndDay)) { // Loop through each day in the date range
       for (const tr of timeRanges) {

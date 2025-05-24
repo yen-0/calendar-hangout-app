@@ -25,7 +25,7 @@ export default function RootLayout({
               {children}
             </main>
             <footer className="text-center p-4 bg-gray-200 text-sm">
-              © {new Date().getFullYear()} Calendar & Hangout App
+              © {new Date().getFullYear()} Hangly
             </footer>
           </div>
           <ClientOnlyToastContainer // Use the wrapper

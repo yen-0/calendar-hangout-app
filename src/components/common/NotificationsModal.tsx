@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase/config';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import { UserNotification, UserNotificationClient } from '@/types/notifications';
-import { CalendarEvent } from '@/types/events';
+import { CalendarEventWithHangoutId } from '@/types/calendar'; // Assuming this type includes hangoutRequestId
 import { addCalendarItem } from '@/lib/firebase/firestoreService'; // For adding event to own calendar
 import { format } from 'date-fns';
 import { BellIcon, CalendarIcon, CheckCircleIcon } from '@heroicons/react/24/outline'; // Or your icons
@@ -95,13 +95,13 @@ const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, onClose
             return;
         }
         setProcessingNotificationId(notification.id);
-        const newCalendarEventData: Omit<CalendarEvent, 'id'> = {
+        const newCalendarEventData: Omit<CalendarEventWithHangoutId, 'id'> = {
             title: `Hangout: ${notification.hangoutRequestName}`,
             start: notification.confirmedSlotStart,
             end: notification.confirmedSlotEnd,
             allDay: false,
             color: '#4CAF50', // Consistent hangout color
-            hangoutRequestId: notification.hangoutRequestId, // Link it
+            hangoutRequestId: notification.hangoutRequestId!, // Link it
             // Add other necessary fields
         };
 

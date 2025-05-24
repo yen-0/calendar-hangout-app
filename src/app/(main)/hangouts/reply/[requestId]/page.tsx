@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import Modal from '@/components/ui/modal'; // Your generic Modal component
-import { HangoutRequest, ParticipantData, CommonSlot } from '@/types/hangouts';
+import { HangoutRequest, ParticipantData, CommonSlot, ConfirmHangoutPayload } from '@/types/hangouts';
 import {
     fetchHangoutRequestById,
     addParticipantToHangoutRequest,
@@ -103,13 +103,16 @@ export default function ReplyToHangoutRequestPage() {
             const userCalendarEvents = await fetchCalendarItems(user.uid);
             const participantEvents = prepareParticipantEventsForRequest(
                 userCalendarEvents,
-                request.dateRanges,
+                request.dateRanges.map(range => ({
+        start: range.start instanceof Timestamp ? range.start.toDate() : new Date(range.start),
+        end: range.end instanceof Timestamp ? range.end.toDate() : new Date(range.end),
+    })),
                 request.timeRanges
             );
             const newParticipantData: ParticipantData = {
                 uid: user.uid,
                 displayName: user.displayName || user.email || "A Participant",
-                submittedAt: new Date(),
+                submittedAt: Timestamp.fromDate(new Date()),
                 events: participantEvents,
             };
 
@@ -535,7 +538,7 @@ export default function ReplyToHangoutRequestPage() {
             <header className="mb-8 pb-4 border-b border-gray-200">
                 <h1 className="text-4xl font-bold tracking-tight text-slate-800">{request.requestName}</h1>
                 <p className="text-sm text-slate-500 mt-1">
-                    Created by <span className="font-semibold text-slate-600">{request.creatorName}</span> on {format(request.createdAt, 'PPP')}
+                    Created by <span className="font-semibold text-slate-600">{request.creatorName}</span> on {format(request.createdAt.toDate(), 'PPP')}
                 </p>
             </header>
 
@@ -548,7 +551,7 @@ export default function ReplyToHangoutRequestPage() {
                             <ul className="list-disc list-inside pl-4 text-slate-500">
                                 {request.dateRanges.map((dr, index) => (
                                     <li key={index}>
-                                        {format(dr.start, 'EEE, MMM d, yyyy')} to {format(dr.end, 'EEE, MMM d, yyyy')}
+                                        {format(dr.start.toDate(), 'EEE, MMM d, yyyy')} to {format(dr.end.toDate(), 'EEE, MMM d, yyyy')}
                                     </li>
                                 ))}
                             </ul>
@@ -572,8 +575,8 @@ export default function ReplyToHangoutRequestPage() {
                         {request.status === 'confirmed' && request.finalSelectedSlot
                             ? (
                                     <>
-                                        {format(request.finalSelectedSlot.start, 'EEE, MMM d, yyyy')} {' '}
-                                        {format(request.finalSelectedSlot.start, 'hh:mm a')} – {format(request.finalSelectedSlot.end, 'hh:mm a')}
+                                        {format(request.finalSelectedSlot.start.toDate(), 'EEE, MMM d, yyyy')} {' '}
+                                        {format(request.finalSelectedSlot.start.toDate(), 'hh:mm a')} - {format(request.finalSelectedSlot.end.toDate(), 'hh:mm a')}
                                     </>
                                 )
                             : (
@@ -742,10 +745,10 @@ export default function ReplyToHangoutRequestPage() {
                                 <h2 className="text-2xl font-bold text-teal-700 mb-3">Event Confirmed!</h2>
                                 <div className="text-xl text-teal-600">
                                     {/* CORRECTED LINES: */}
-                                    <p>{format(request.finalSelectedSlot.start, 'EEE, MMM d, yyyy')}</p>
+                                    <p>{format(request.finalSelectedSlot.start.toDate(), 'EEE, MMM d, yyyy')}</p>
                                     <p>
-                                        {format(request.finalSelectedSlot.start, 'hh:mm a')} –
-                                        {format(request.finalSelectedSlot.end, 'hh:mm a')}
+                                        {format(request.finalSelectedSlot.start.toDate(), 'hh:mm a')} –
+                                        {format(request.finalSelectedSlot.end.toDate(), 'hh:mm a')}
                                     </p>
                                 </div>
                                 {/* You might want to list who confirmed or was available */}
@@ -770,7 +773,7 @@ export default function ReplyToHangoutRequestPage() {
                             </p>
                             <p className="mt-3 text-sm text-gray-600">
                                 This will send an invitation to all available participants
-                                ({slotToConfirmDetails?.availableParticipants.map(pid => request?.participants[pid]?.displayName || 'Unknown').join(', ')}).
+                                ({slotToConfirmDetails?.availableParticipants?.map(pid => request?.participants[pid]?.displayName || 'Unknown').join(', ')}).
                             </p>
                             <p className="mt-1 text-sm text-gray-600">Are you sure?</p>
                         </div>

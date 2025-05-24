@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { CalendarEvent } from '@/types/events';
-import { View } from 'react-big-calendar';
+import { View, Views } from 'react-big-calendar';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import Modal from '@/components/ui/modal';
@@ -417,12 +417,8 @@ useEffect(() => {
         });
     }, [dateForDetailsModal, displayedEvents]);
 
-      const handleNavigate = useCallback((newDate: Date, view: View, action: string) => {
-    setCurrentDate(newDate); // Keep your existing currentDate state for centering the calendar
-
-    // Calculate the new view window based on newDate and view
-    // This is a simplified calculation; react-big-calendar might have more direct ways
-    // to get the exact range, or you might use its `onRangeChange` prop.
+      const handleNavigate = useCallback((newDate: Date, view: View) => {
+    setCurrentDate(newDate); 
     let start = new Date(newDate);
     let end = new Date(newDate);
 
@@ -439,9 +435,9 @@ useEffect(() => {
       start = startOfDay(start);
       end = endOfDay(end);
     }
-    // For Agenda, onRangeChange is better. For now, this is a rough window.
+
     setViewWindow({ start, end });
-  }, []); // Removed setCurrentDate as it's already done inside, no external deps if newDate is from callback
+  }, []); 
 
   const handleViewChange = useCallback((newView: View) => {
     setCurrentView(newView);
@@ -454,8 +450,7 @@ useEffect(() => {
     
     // Temporary: re-trigger navigate to update window. Not ideal.
     // handleNavigate(currentDate, newView, 'VIEW_CHANGE');
-  }, [currentDate]); // Add handleNavigate if you call it
-
+  }, [currentDate]); 
 
   // This is a more reliable way to get the view range from react-big-calendar
   const handleRangeChange = useCallback((range: Date[] | { start: Date; end: Date }) => {
@@ -552,7 +547,7 @@ useEffect(() => {
                     currentDate={currentDate}
                     onView={handleViewChange}
                     onNavigate={handleNavigate}
-                    onRangeChange={handleRangeChange} // Add this prop to RBC
+                    //onRangeChange={handleRangeChange} // Add this prop to RBC
                     onSelectEvent={handleSelectEvent}
                     onSelectSlot={handleSelectSlot}
                     isSimpleMode={isSimpleMode}

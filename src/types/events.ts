@@ -1,4 +1,5 @@
 // src/types/events.ts
+import { DayKey } from '@/types/calendar';
 export interface CalendarEvent {
   id: string;
   title: string;        // For Stamps, this is the Label
@@ -11,7 +12,7 @@ export interface CalendarEvent {
   emoji?: string;        // Emoji icon for the Stamp
 
   // Repeat rules for Stamps
-  repeatDays?: ('SUN' | 'MON' | 'TUE' | 'WED' | 'THU' | 'FRI' | 'SAT')[]; // Days of the week
+  repeatDays?: DayKey[]; // Days of the week
   repeatFrequency?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'; // Could add more later (e.g., DAILY)
   repeatInterval?: number; // e.g., repeat every 2 weeks if frequency is WEEKLY
   repeatEndDate?: Date;  // The date until which the stamp should repeat

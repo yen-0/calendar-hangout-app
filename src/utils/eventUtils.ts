@@ -1,5 +1,6 @@
 // src/utils/eventUtils.ts
 import { CalendarEvent } from '@/types/events';
+import { DayKey } from '@/types/calendar';
 import {
   addDays,
   addMonths, // For monthly repeats if we add them
@@ -16,9 +17,9 @@ import {
 } from 'date-fns';
 
 // Helper to map 'SUN', 'MON' to 0, 1 etc. (date-fns getDay format)
-const dayKeyToDayIndex = (dayKey: CalendarEvent['repeatDays'] extends (infer U)[] ? U : never): number => {
-  const map = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 };
-  return map[dayKey];
+export const dayKeyToDayIndex = (dayKey: DayKey): number => {
+  const daysOrder: DayKey[] = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+  return daysOrder.indexOf(dayKey);
 };
 
 export function expandRecurringEvents(

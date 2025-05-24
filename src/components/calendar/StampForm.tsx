@@ -23,7 +23,10 @@ const formatDateForDateInput = (date: Date | undefined | null): string => {
     return new Date(date).toISOString().split('T')[0];
 };
 
-const daysOfWeekMap: { key: CalendarEvent['repeatDays'] extends (infer U)[] ? U : never, label: string }[] = [
+
+
+
+const daysOfWeekMap: { key: NonNullable<CalendarEvent['repeatDays']>[number]; label: string }[] = [
     { key: 'SUN', label: 'Sun' }, { key: 'MON', label: 'Mon' }, { key: 'TUE', label: 'Tue' },
     { key: 'WED', label: 'Wed' }, { key: 'THU', label: 'Thu' }, { key: 'FRI', label: 'Fri' },
     { key: 'SAT', label: 'Sat' },

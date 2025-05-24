@@ -238,7 +238,7 @@ export default function HangoutsPage() {
                     </Link>
                   </h2>
                   <p className="text-xs text-gray-500">
-                    Created: {format(req.createdAt, 'PPP')} {/* Use date-fns format */}
+                    Created: {format(req.createdAt.toDate(), 'PPP')} {/* Use date-fns format */}
                   </p>
                   <p className="text-xs text-gray-500">
                     Status: <span className="font-medium capitalize">{req.status.replace(/_/g, ' ')}</span>
@@ -255,11 +255,11 @@ export default function HangoutsPage() {
                   Copy Share Link
                 </Button>
               </div>
-              {user && user.uid === req.creatorUid && (req.status !== 'closed') && (
+              {user && user.uid === req.creatorUid && req.status !== 'closed' && req.status !== 'confirmed' &&(
                 <div className="mt-4 pt-3 border-t border-gray-200 flex flex-wrap items-center gap-2">
-                  {req.status !== 'confirmed' && req.status !== 'closed' && ( // Only show Edit/Delete if not confirmed or closed
+                  
                     <>
-                      <Button
+                      <Button    //{req.status !== 'confirmed' || req.status !== 'closed' && ( 
                         variant="outline"
                         size="sm"
                         onClick={() => handleOpenEditModal(req)}
@@ -276,14 +276,14 @@ export default function HangoutsPage() {
                         Delete
                       </Button>
                     </>
-                  )}
+                  
                   <Button
                     variant="secondary"
                     size="sm"
                     onClick={() => handleCloseRequest(req)} // handleCloseRequest should probably be handleArchiveOrCloseRequest
-                    disabled={isProcessingAction}
+                    disabled={isProcessingAction} // {req.status === 'confirmed' ? 'Archive' : 'Close Request'}
                   >
-                    {req.status === 'confirmed' ? 'Archive' : 'Close Request'}
+                    
                   </Button>
                 </div>
               )}
@@ -317,7 +317,10 @@ export default function HangoutsPage() {
               // Date/Time ranges are complex to edit once submissions start.
               // For simplicity, we might not allow editing them here or make the form handle it.
               // The HangoutRequestForm would need to be adapted if these are editable.
-              dateRanges: editingRequest.dateRanges.map(dr => ({ start: new Date(dr.start), end: new Date(dr.end) })),
+              dateRanges: editingRequest.dateRanges.map(range => ({
+                start: range.start.toDate(), // Convert Firestore Timestamp to Date
+                end: range.end.toDate(),
+              })),
               timeRanges: editingRequest.timeRanges,
             }}
           />

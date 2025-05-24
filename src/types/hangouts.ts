@@ -1,7 +1,11 @@
 // src/types/hangouts.ts
 import { Timestamp } from 'firebase/firestore';
 import { CalendarEvent } from './events'; // Assuming this has { title, start, end }
-
+export interface CommonSlot {
+    start: Date;
+    end: Date;
+    availableParticipants?: string[];
+}
 export interface DateRange {
   start: Date; // Stored as Timestamp in Firestore, but Date in client
   end: Date;   // Stored as Timestamp in Firestore, but Date in client
@@ -31,8 +35,8 @@ export interface HangoutRequest {
   creatorUid: string;
   creatorName: string; // Denormalized
   requestName: string;
-  status: 'pending' | 'calculating' | 'results_ready' | 'closed';
   createdAt: Timestamp;
+  
   desiredDurationMinutes: number;
   desiredMarginMinutes: number;
   desiredMemberCount: number;
@@ -40,9 +44,31 @@ export interface HangoutRequest {
   timeRanges: TimeRange[]; // Stored as is (string HH:mm)
   participants: {
     [userId: string]: ParticipantData; // Map of participant UID to their data
-  };
+  }
+  finalSelectedSlot?: { start: Timestamp, end: Timestamp };
   // shareableLink?: string; // Can be derived: /hangouts/reply/{id}
+  commonAvailabilitySlots?: any; // Calculated common slots
+  calendarEvents?: CalendarEvent[]; // Optional: Denormalized events for quick access
+
+
+  status: 'pending' |              // Initial state, waiting for participants
+          'pending_calculation' |   // Enough participants joined, ready for calculation or calculation in progress
+          'results_ready' |         // Common slots have been found
+          'no_slots_found' |        // Calculation ran, but no common slots identified
+          'confirmed' |             // Creator has selected a final slot
+          'closed';                 // Manually closed by creator (e.g., event happened or cancelled)
+
+  // Optional: Populated when the creator confirms a final slot
+  
 }
+
+
+
+
+
+
+
+
 
 // For form data before conversion to Firestore types
 export interface HangoutRequestFormData {
@@ -59,9 +85,19 @@ export interface FinalSelectedSlot {
      // availableParticipants?: string[]; // Optional: can be useful to store who was available for the chosen one
    }
 
-export interface HangoutRequest {
-   // ... (existing fields)
-   status: 'pending' | 'pending_calculation' | 'results_ready' | 'no_slots_found' | 'confirmed' | 'closed';
-   finalSelectedSlot?: { start: Timestamp, end: Timestamp }; // Stored as Timestamps in Firestore
-   // commonAvailabilitySlots?: CommonSlot[]; // This is already there from previous step, for Firestore it would be Timestamps too
- }
+
+
+export interface ConfirmHangoutPayload {
+  hangoutRequestId: string;
+  // add any other required fields, for example:
+  chosenSlot: {
+    start: string;
+    end: string;
+    availableParticipants?: string[]; // Optional: who was available for this slot
+  };
+}
+
+export interface FinalSelectedSlot {
+  start: Date;
+  end: Date;
+}

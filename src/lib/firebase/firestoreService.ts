@@ -25,6 +25,7 @@ import {
   HangoutRequestFormData,
   ParticipantData,
   ParticipantEvent,
+  FinalSelectedSlot,
   DateRange as ClientDateRange // Alias to avoid conflict if DateRange is globally defined
 } from '@/types/hangouts';
 
@@ -149,8 +150,8 @@ export const createHangoutRequest = async (
       submittedAt: Timestamp.now(),
       events: creatorEvents.map(event => ({
         ...event,
-        start: Timestamp.fromDate(new Date(event.start)), // Ensure Timestamps
-        end: Timestamp.fromDate(new Date(event.end)),     // Ensure Timestamps
+        start: Timestamp.fromDate(new Date(event.start.toDateString())).toDate(), // Ensure Timestamps
+        end: Timestamp.fromDate(new Date(event.end.toDateString())).toDate(),     // Ensure Timestamps
       })),
     };
 
@@ -191,11 +192,19 @@ export const fetchHangoutRequestsForUser = async (userId: string): Promise<Hango
       const data = doc.data();
       requests.push({
         id: doc.id,
-        ...data,
-        createdAt: (data.createdAt as Timestamp).toDate(), // CONVERT TO JS DATE HERE
+        creatorUid: data.creatorUid,
+        creatorName: data.creatorName,
+        requestName: data.requestName,
+        status: data.status,
+        desiredDurationMinutes: data.desiredDurationMinutes,
+        desiredMarginMinutes: data.desiredMarginMinutes,
+        desiredMemberCount: data.desiredMemberCount,
+        timeRanges: data.timeRanges, // Assuming timeRanges is already in the correct format
+        // Convert Firestore Timestamps back to JS Dates
+        createdAt: (data.createdAt as Timestamp), 
         dateRanges: data.dateRanges.map((dr: any) => ({
-          start: (dr.start as Timestamp).toDate(),
-          end: (dr.end as Timestamp).toDate(),
+          start: (dr.start as Timestamp),
+          end: (dr.end as Timestamp),
         })),
         participants: Object.entries(data.participants || {}).reduce((acc, [pUid, pData]: [string, any]) => {
           acc[pUid] = {
@@ -262,10 +271,10 @@ export const fetchHangoutRequestById = async (requestId: string): Promise<Hangou
       return {
         id: docSnap.id,
         // ... other properties from data, ensuring their Timestamps are converted
-        createdAt: (data.createdAt as Timestamp).toDate(),
+        createdAt: (data.createdAt as Timestamp),
         dateRanges: (data.dateRanges || []).map((dr: any) => ({
-          start: (dr.start as Timestamp).toDate(),
-          end: (dr.end as Timestamp).toDate(),
+          start: (dr.start as Timestamp),
+          end: (dr.end as Timestamp),
         })),
         participants: Object.entries(data.participants || {}).reduce((acc, [pUid, pData]: [string, any]) => {
           acc[pUid] = {
@@ -322,7 +331,7 @@ export const addParticipantToHangoutRequest = async (
 
     const participantDataForFirestore = {
       ...participantData,
-      submittedAt: Timestamp.fromDate(new Date(participantData.submittedAt)), // Ensure submittedAt is a Timestamp
+      submittedAt: Timestamp.fromDate(new Date(participantData.submittedAt.toDate())), // Ensure submittedAt is a Timestamp
       events: eventsWithTimestamps,
     };
 
