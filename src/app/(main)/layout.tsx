@@ -7,7 +7,7 @@ import AppHeader from '@/components/layout/AppHeader'; // Your shared header
 import NotificationsModal from '@/components/common/NotificationsModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase/config';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from '@/lib/firebase';
 
 export default function MainAppLayout({
   children,

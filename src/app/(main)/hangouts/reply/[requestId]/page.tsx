@@ -17,7 +17,7 @@ import { findCommonAvailability } from '@/utils/hangoutUtils';
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toasts';
 import Link from 'next/link';
 import { format } from 'date-fns';
-import { writeBatch, Timestamp, updateDoc, doc, collection } from 'firebase/firestore';// Firestore specific
+import { writeBatch, Timestamp, updateDoc, doc, collection } from '@/lib/firebase';// Firestore specific
 import { db } from '@/lib/firebase/config'; // Your db instance
 import { CheckCircleIcon } from '@heroicons/react/24/solid'; // Example icon, adjust as needed
 import { addCalendarItem } from '@/lib/firebase/firestoreService';
