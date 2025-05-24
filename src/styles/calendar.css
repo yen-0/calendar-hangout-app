@@ -1,0 +1,193 @@
+/* src/styles/calendar.css */
+@import 'react-big-calendar/lib/css/react-big-calendar.css';
+
+/* Optional: Customizations to make it blend better with Tailwind */
+.rbc-toolbar button {
+  @apply px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500;
+}
+
+.rbc-toolbar button.rbc-active {
+  @apply bg-blue-500 text-white hover:bg-blue-600;
+}
+
+.rbc-toolbar {
+  @apply mb-4 flex flex-wrap items-center justify-between;
+}
+
+.rbc-event {
+  @apply bg-blue-500 border-blue-500 rounded p-1 text-xs;
+}
+
+.rbc-event.rbc-selected {
+  @apply bg-blue-700;
+}
+
+.rbc-slot-selection {
+  @apply bg-blue-300 opacity-50;
+}
+
+.rbc-day-slot .rbc-event { /* For week/day view event styling if needed later */
+    border: 1px solid #2563eb; /* blue-600 */
+    background-color: #3b82f6; /* blue-500 */
+}
+.rbc-day-slot .rbc-event:focus {
+    outline: 2px solid #1d4ed8; /* blue-700 */
+}
+.rbc-day-bg + .rbc-day-bg { /* Add left border to day columns except the first */
+    @apply border-l border-gray-200;
+}
+.rbc-month-row + .rbc-month-row { /* Add top border to month rows except the first */
+    @apply border-t border-gray-200;
+}
+.rbc-header {
+    @apply py-2 text-sm font-medium text-gray-600 border-b border-gray-200 text-center;
+}
+.rbc-today {
+  @apply bg-sky-100; /* A light blue for today's date */
+}
+.rbc-off-range-bg {
+  @apply bg-gray-50; /* Lighter gray for dates not in current month */
+}
+.rbc-date-cell {
+  @apply p-1 text-right;
+}
+.rbc-row-segment .rbc-event-content {
+    @apply overflow-hidden whitespace-nowrap text-ellipsis;
+}
+.rbc-month-view .rbc-day-bg.has-events-dot {
+  position: relative; /* Needed for pseudo-element positioning */
+}
+
+.rbc-month-view .rbc-day-bg.has-events-dot::after {
+  content: '';
+  position: absolute;
+  bottom: 6px; /* Adjust position as needed */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8px; /* Dot size */
+  height: 8px; /* Dot size */
+  background-color: #ef4444; /* red-500, default dot color */
+  border-radius: 50%;
+  /* Consider multiple dots or different colors later */
+}
+
+/* If you want to color dots based on event colors, it's more complex.
+   You might need to inject multiple ::after elements or use a different approach,
+   possibly by rendering tiny colored divs directly in a custom day cell component.
+   For now, one red dot signifies "events exist".
+*/
+.rbc-date-header-button { /* Style for the clickable day numbers */
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: flex-start; /* Align day number to top */
+    justify-content: flex-end; /* Align day number to right */
+    padding: 2px 4px; /* Small padding */
+}
+.rbc-date-cell { /* Override padding for date cell to allow header button to fill */
+    padding: 0 !important; 
+}
+.rbc-agenda-view table.rbc-agenda-table td {
+  @apply p-3 text-left border-b border-gray-200;
+  vertical-align: top;
+}
+
+/* This is the crucial part for the date cell */
+.rbc-agenda-date-cell {
+  @apply whitespace-nowrap pr-4; /* Ensure this doesn't get overridden */
+  /* If the date cell is truly empty by RBC for subsequent events, it will just be an empty padded cell. */
+  /* If you want to give it a minimum width to maintain column structure: */
+  /* min-width: 100px; /* Adjust as needed */
+}
+
+.rbc-agenda-time-cell {
+  @apply whitespace-nowrap pr-4;
+  /* min-width: 80px; /* Adjust as needed */
+}
+
+.rbc-agenda-event-cell {
+  /* This cell contains the event title */
+}
+.rbc-agenda-view table.rbc-agenda-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.rbc-agenda-view table.rbc-agenda-table tbody tr:hover {
+  @apply bg-gray-50;
+}
+
+.rbc-agenda-view table.rbc-agenda-table th,
+.rbc-agenda-view table.rbc-agenda-table td {
+  @apply p-3 text-left border-b border-gray-200;
+  vertical-align: top; /* Important for rowspan cells to align content well */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Add right borders to delineate columns */
+/* This will apply to the single rowspan'd date cell too */
+.rbc-agenda-view table.rbc-agenda-table th:not(:last-child),
+.rbc-agenda-view table.rbc-agenda-table td:not(:last-child) {
+    @apply border-r border-gray-200;
+}
+
+/* For the very first cell in the row (which is the date cell, rowspan or not)
+   and subsequent cells, ensure they have a top border for consistency,
+   especially if a cell above it was part of a rowspan. */
+.rbc-agenda-view table.rbc-agenda-table td {
+    /* border-top: 1px solid #e5e7eb; /* Example: Tailwind's gray-200 */
+    /* This might create double borders with border-b.
+       `border-collapse: collapse` should handle this, but if not,
+       you might need to be more specific.
+       The border-b on all cells is usually sufficient for horizontal lines.
+    */
+}
+
+
+.rbc-agenda-view table.rbc-agenda-table th {
+  @apply text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50;
+}
+
+/* Column Width Definitions */
+.rbc-agenda-view table.rbc-agenda-table th.rbc-header:nth-child(1), /* Date Header */
+.rbc-agenda-view table.rbc-agenda-table td.rbc-agenda-date-cell {   /* Date Cell (even if rowspan'd) */
+  width: 200px;
+}
+
+.rbc-agenda-view table.rbc-agenda-table th.rbc-header:nth-child(2), /* Time Header */
+.rbc-agenda-view table.rbc-agenda-table td.rbc-agenda-time-cell {   /* Time Cell */
+  width: 200px;
+  @apply whitespace-nowrap;
+}
+
+.rbc-agenda-view table.rbc-agenda-table th.rbc-header:nth-child(3), /* Event Header */
+.rbc-agenda-view table.rbc-agenda-table td.rbc-agenda-event-cell {   /* Event Cell */
+  width: auto;
+}
+
+.rbc-agenda-view .rbc-event-content {
+    @apply text-sm;
+}
+
+/* The inline styles on <tr> are problematic:
+   style="background-color: rgb(37, 99, 235); border-radius: 4px; opacity: 0.9; color: white; border: 0px; display: block; font-size: 0.75em; padding: 1px 3px;"
+   Especially `display: block;` on a `<tr>` is not standard for table layout and can break `table-layout: fixed`.
+   And `padding` on `<tr>` is also unusual.
+   These styles are likely coming from `eventPropGetter`.
+*/
+
+/* Attempt to override problematic inline styles from eventPropGetter on <tr> for agenda view */
+.rbc-agenda-view table.rbc-agenda-table tr.rbc-agenda-row {
+    display: table-row !important; /* Force it back to table-row */
+    background-color: transparent !important; /* Reset background from tr */
+    color: inherit !important; /* Reset color from tr */
+    padding: 0 !important; /* Reset padding from tr */
+    border-radius: 0 !important; /* Reset border-radius from tr */
+    /* opacity, border, font-size might also need resetting if they cause issues here */
+}
+/* Apply event background color to the event cell instead of the whole row in agenda */
+.rbc-agenda-view table.rbc-agenda-table td.rbc-agenda-event-cell .rbc-event-content-wrapper { /* Assuming a wrapper for color */
+    /* This is tricky if CustomEvent is used. Let's adjust CustomEvent for agenda. */
+}
