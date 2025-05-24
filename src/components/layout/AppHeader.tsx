@@ -29,7 +29,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onOpenNotifications, unreadNotifi
           href={user && !isGuest ? "/calendar" : "/"} // Guests go to landing, users to calendar
           className="text-2xl font-bold text-blue-600 hover:text-blue-700 transition-colors"
         >
-          MyAppName {/* Replace with your actual app name or logo component */}
+           Hangly
         </Link>
 
         {/* Navigation and Actions - shown if user or guest */}
