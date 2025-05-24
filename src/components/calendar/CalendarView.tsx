@@ -45,7 +45,7 @@ interface CalendarViewProps {
 
 // Custom component for the date cell wrapper in Month View (for colored dots)
 // Assuming this component is correct and working as intended from previous steps.
-const CustomDateCellWrapper = ({ children, value: date, events, isSimpleMode }: { children: React.ReactNode, value: Date, events: CalendarEvent[], isSimpleMode: boolean }) => {
+const CustomDateCellWrapper = ({ children, value: date, events, isSimpleMode=false }: { children: React.ReactNode, value: Date, events: CalendarEvent[], isSimpleMode: boolean }) => {
   if (!isSimpleMode || !children) {
     return <div className="rbc-day-bg">{children}</div>;
   }
