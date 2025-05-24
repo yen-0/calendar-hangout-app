@@ -102,7 +102,7 @@ export const CalendarView = ({
   onNavigate,
   onSelectEvent,
   onSelectSlot,
-  isSimpleMode
+  isSimpleMode = false,
 }: CalendarViewProps) => {
 
   const eventPropGetter = (event: CalendarEvent, start: Date, end: Date, isSelected: boolean) => {
