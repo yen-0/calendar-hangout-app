@@ -2,17 +2,23 @@
 'use client';
 
 import React, { useState } from 'react';
-import { HangoutRequestFormData, DateRange, TimeRange } from '@/types/hangouts';
+// Import DateRangeClient instead of DateRange
+import { HangoutRequestFormData, DateRangeClient, TimeRange } from '@/types/hangouts';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea'; // Assuming you have this for multi-line description if needed
-import { XCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'; // Or any other icons
+// import { Textarea } from '@/components/ui/textarea'; // Assuming you might use it later
+import { XCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid';
 
 // Helper to format Date to 'yyyy-MM-dd' for date input
 const formatDateForDateInput = (date: Date | undefined | null): string => {
     if (!date) return '';
-    return new Date(date).toISOString().split('T')[0];
+    // Ensure the date is treated as local when converting to ISO string for date input
+    // to avoid timezone shifts making it appear as the previous day.
+    const tempDate = new Date(date);
+    const offset = tempDate.getTimezoneOffset();
+    const localizedDate = new Date(tempDate.getTime() - (offset*60*1000));
+    return localizedDate.toISOString().split('T')[0];
 };
 
 
@@ -20,7 +26,7 @@ interface HangoutRequestFormProps {
   onSave: (formData: HangoutRequestFormData) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
-  initialData?: Partial<HangoutRequestFormData>; // For editing later, not used now
+  initialData?: Partial<HangoutRequestFormData>;
 }
 
 const HangoutRequestForm: React.FC<HangoutRequestFormProps> = ({
@@ -30,7 +36,8 @@ const HangoutRequestForm: React.FC<HangoutRequestFormProps> = ({
   initialData,
 }) => {
   const [requestName, setRequestName] = useState(initialData?.requestName || '');
-  const [dateRanges, setDateRanges] = useState<DateRange[]>(
+  // Use DateRangeClient for the state and initial data
+  const [dateRanges, setDateRanges] = useState<DateRangeClient[]>(
     initialData?.dateRanges || [{ start: new Date(), end: new Date() }]
   );
   const [timeRanges, setTimeRanges] = useState<TimeRange[]>(
@@ -46,19 +53,12 @@ const HangoutRequestForm: React.FC<HangoutRequestFormProps> = ({
     initialData?.desiredMemberCount || 2
   );
 
-  const handleDateRangeChange = (index: number, field: keyof DateRange, value: string) => {
+  // Use DateRangeClient for the field type
+  const handleDateRangeChange = (index: number, field: keyof DateRangeClient, value: string) => {
     const newDateRanges = [...dateRanges];
-    // When changing a date string, preserve the time part if it exists, or set to start/end of day.
-    const currentDate = newDateRanges[index][field] || new Date();
-    const newDate = new Date(value); // This will be midnight UTC
-    
-    // Preserve time from existing date, apply new YYYY-MM-DD
-    const updatedDate = new Date(currentDate);
-    updatedDate.setFullYear(newDate.getUTCFullYear());
-    updatedDate.setMonth(newDate.getUTCMonth());
-    updatedDate.setDate(newDate.getUTCDate());
+    const newDateFromInput = new Date(value + 'T00:00:00'); // Ensure parsing as local date at midnight
 
-    newDateRanges[index] = { ...newDateRanges[index], [field]: updatedDate };
+    newDateRanges[index] = { ...newDateRanges[index], [field]: newDateFromInput };
     setDateRanges(newDateRanges);
   };
 
@@ -78,17 +78,17 @@ const HangoutRequestForm: React.FC<HangoutRequestFormProps> = ({
     e.preventDefault();
     if (!requestName.trim()) { alert("Request Name is required."); return; }
     if (dateRanges.some(dr => !dr.start || !dr.end || new Date(dr.end) < new Date(dr.start))) {
-        alert("All date ranges must have a valid start and end, with end after start."); return;
+        alert("All date ranges must have a valid start and end, with end date being on or after start date."); return;
     }
     if (timeRanges.some(tr => !tr.start || !tr.end || tr.end <= tr.start)) {
-        alert("All time ranges must have a valid start and end, with end after start (e.g., 09:00 to 17:00)."); return;
+        alert("All time ranges must have a valid start and end, with end time after start time (e.g., 09:00 to 17:00)."); return;
     }
     if (desiredDurationMinutes <= 0) { alert("Duration must be positive."); return; }
     if (desiredMemberCount < 2) { alert("Member count must be at least 2."); return; }
 
     await onSave({
       requestName,
-      dateRanges,
+      dateRanges, // This is already DateRangeClient[]
       timeRanges,
       desiredDurationMinutes,
       desiredMarginMinutes,
@@ -144,6 +144,7 @@ const HangoutRequestForm: React.FC<HangoutRequestFormProps> = ({
 
       {/* Time Ranges */}
       <div className="space-y-3">
+        {/* ... Time Ranges JSX remains the same ... */}
         <div className="flex justify-between items-center">
           <Label>Time Ranges (within each selected day)</Label>
           <Button type="button" variant="ghost" size="sm" onClick={addTimeRange} className="text-blue-600">
@@ -182,6 +183,7 @@ const HangoutRequestForm: React.FC<HangoutRequestFormProps> = ({
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* ... Desired Duration, Margin, Member Count JSX remains the same ... */}
         <div>
             <Label htmlFor="desiredDuration">Desired Duration (minutes)</Label>
             <Input id="desiredDuration" type="number" min="15" step="15" value={desiredDurationMinutes} onChange={(e) => setDesiredDurationMinutes(parseInt(e.target.value, 10))} required />
@@ -198,6 +200,7 @@ const HangoutRequestForm: React.FC<HangoutRequestFormProps> = ({
       </div>
 
       <div className="flex justify-end space-x-3 pt-4 border-t mt-6">
+        {/* ... Buttons JSX remains the same ... */}
         <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
           Cancel
         </Button>

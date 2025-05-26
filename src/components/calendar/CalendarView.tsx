@@ -1,16 +1,14 @@
 // src/components/calendar/CalendarView.tsx
 'use client';
 
-import React from 'react'; // Explicitly import React if not already
-import { 
-    Calendar, 
-    dateFnsLocalizer, 
-    Views, 
-    View, 
-    EventProps, 
-    DateHeaderProps, // Not currently used in the latest version of your code
-    // DayLayoutAlgorithm, // You commented out its usage
-    // DayLayoutFunction // You commented out its usage
+import React from 'react';
+import {
+    Calendar,
+    dateFnsLocalizer,
+    Views,
+    View,
+    EventProps,
+    // DateHeaderProps, // Not currently used
 } from 'react-big-calendar';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
@@ -18,7 +16,13 @@ import { startOfWeek } from 'date-fns/startOfWeek';
 import { getDay } from 'date-fns/getDay';
 import { enUS } from 'date-fns/locale/en-US';
 import { CalendarEvent } from '@/types/events';
-import { isSameDay, isWithinInterval } from 'date-fns';
+import {
+    isSameDay,
+    startOfDay,
+    isBefore,
+    // isWithinInterval, // Replaced with startOfDay logic for allDay events
+    // endOfDay // Not strictly needed for the revised allDay logic
+} from 'date-fns';
 
 const locales = {
   'en-US': enUS,
@@ -34,36 +38,41 @@ const localizer = dateFnsLocalizer({
 
 interface CalendarViewProps {
   events: CalendarEvent[];
-  currentView?: View; // This prop is crucial
+  currentView?: View;
   onView?: (view: View) => void;
   currentDate?: Date;
-  onNavigate?: (newDate: Date, view: View) => void;
+  onNavigate?: (newDate: Date, view: View, action: string) => void; // Added action for handleNavigate compatibility
+  onRangeChange?: (range: Date[] | { start: Date; end: Date }) => void; // For viewWindow updates
   onSelectEvent?: (event: CalendarEvent) => void;
   onSelectSlot?: (slotInfo: { start: Date; end: Date; slots: Date[] | string[]; action: 'select' | 'click' | 'doubleClick' }) => void;
   isSimpleMode: boolean;
 }
 
 // Custom component for the date cell wrapper in Month View (for colored dots)
-// Assuming this component is correct and working as intended from previous steps.
-const CustomDateCellWrapper = ({ children, value: date, events, isSimpleMode=false }: { children: React.ReactNode, value: Date, events: CalendarEvent[], isSimpleMode: boolean }) => {
+const CustomDateCellWrapper = ({
+  children,
+  value: date, // This is the date for the current cell
+  events,       // This should be ALL events passed to the Calendar
+  isSimpleMode
+}: { children: React.ReactNode, value: Date, events: CalendarEvent[], isSimpleMode: boolean }) => {
+
   if (!isSimpleMode || !children) {
     return <div className="rbc-day-bg">{children}</div>;
   }
 
   const eventsOnDay = events.filter(event => {
+    const cellDateStart = startOfDay(date);
+    const eventStartDay = startOfDay(event.start);
+
     if (event.allDay && event.start && event.end) {
-        // For allDay events, RBC often sets end to the start of the next day.
-        // isWithinInterval is exclusive for end, so adjust if needed or use isSameDay logic carefully.
-        // Let's consider an allDay event to be on a day if the day is between its start (inclusive) and end (exclusive)
-        // or if it's a single allDay event, it's just on event.start.
-        const eventEndForCheck = new Date(event.end);
-        // If event.end is midnight (e.g. for an allDay event ending "on" a day), subtract 1ms for isWithinInterval
-        if (eventEndForCheck.getHours() === 0 && eventEndForCheck.getMinutes() === 0 && eventEndForCheck.getSeconds() === 0) {
-            eventEndForCheck.setTime(eventEndForCheck.getTime() -1);
-        }
-        return isWithinInterval(date, { start: event.start, end: eventEndForCheck }) || isSameDay(event.start, date);
+        // For all-day events, RBC often sets event.end to the start of the *next* day.
+        // We want to include the event if the cellDate is on or after event.start
+        // AND strictly before event.end (when event.end is start of next day).
+        const eventEffectiveEnd = startOfDay(event.end);
+        return !isBefore(cellDateStart, eventStartDay) && isBefore(cellDateStart, eventEffectiveEnd);
     }
-    return isSameDay(event.start, date);
+    // For non-all-day events (or single all-day events where end might not be properly set for multi-day logic)
+    return isSameDay(cellDateStart, eventStartDay);
   });
 
   const uniqueColors: string[] = [];
@@ -71,13 +80,13 @@ const CustomDateCellWrapper = ({ children, value: date, events, isSimpleMode=fal
     const colors = eventsOnDay
       .map(event => event.color || '#3174ad')
       .filter((color, index, self) => self.indexOf(color) === index);
-    uniqueColors.push(...colors.slice(0, 4));
+    uniqueColors.push(...colors.slice(0, 4)); // Max 4 dots
   }
 
   return (
     <div className="rbc-day-bg relative">
       {children}
-      {isSimpleMode && uniqueColors.length > 0 && (
+      {uniqueColors.length > 0 && ( // isSimpleMode is already true if we reach here
         <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex space-x-1 justify-center w-full px-1">
           {uniqueColors.map((color, index) => (
             <span
@@ -96,57 +105,44 @@ const CustomDateCellWrapper = ({ children, value: date, events, isSimpleMode=fal
 
 export const CalendarView = ({
   events,
-  currentView = Views.MONTH, // Default value, but CalendarPage should control this via state
+  currentView = Views.MONTH,
   onView,
-  currentDate = new Date(),   // Default value, but CalendarPage should control this via state
+  currentDate = new Date(),
   onNavigate,
+  onRangeChange,
   onSelectEvent,
   onSelectSlot,
-  isSimpleMode = false,
+  isSimpleMode, // Relies on CalendarPage to pass the correct boolean value
 }: CalendarViewProps) => {
 
-  const eventPropGetter = (event: CalendarEvent, start: Date, end: Date, isSelected: boolean) => {
-    // Base styles, mostly for Month/Week/Day event bars
+  const eventPropGetter = (event: CalendarEvent) => { // Removed unused start, end, isSelected for simplicity
     let style: React.CSSProperties = {
       backgroundColor: event.color || '#3174ad',
       borderRadius: '4px',
       opacity: 0.9,
       color: 'white',
       border: '0px',
-      display: 'block', // Good for event bars, problematic for Agenda TR
+      display: 'block',
     };
 
-    // If currentView is Agenda, return empty styles for the TR to prevent breaking table layout
     if (currentView === Views.AGENDA) {
-      return { style: {} }; // This is the key change for Agenda TR styling
+      return { style: {} };
     }
 
-    // Logic for other views
     if (isSimpleMode && currentView === Views.MONTH) {
       style = {
-        // For simple mode month view, we hide the event bars.
-        // No need to spread ...style if we are completely overriding display.
-        display: 'none',
+        display: 'none', // Hide the event bars in simple month view
       };
-    } else { // This 'else' covers Detailed Month, Week, Day (regardless of simple/detailed for W/D)
+    } else {
       style.fontSize = '0.75em';
       style.padding = '1px 3px';
-      // Ensure backgroundColor is set if not in simple month view
-      if (event.color) {
-        style.backgroundColor = event.color;
-      } else {
-        style.backgroundColor = '#3174ad'; // Default if no event.color
-      }
+      // Ensure backgroundColor is set if not in simple month view (already handled by initial style)
     }
-
     return { style };
   };
 
-  // Custom component for rendering the event itself (title, emoji)
-  // This component is used *inside* the event container (e.g., inside the bar, or inside the Agenda event cell)
   const CustomEvent = ({ event }: EventProps<CalendarEvent>) => {
     if (currentView === Views.AGENDA) {
-      // Specific rendering for Agenda view: apply colors/padding to this inner div
       return (
         <div 
           style={{ 
@@ -154,18 +150,17 @@ export const CalendarView = ({
             color: 'white', 
             padding: '3px 6px',
             borderRadius: '4px', 
-            display: 'inline-block', // Makes it look like a "pill" or "tag"
-            fontSize: '0.8em' // Readable font size for agenda list
+            display: 'inline-block',
+            fontSize: '0.8em'
           }}
           title={event.title}
         >
           {event.isStamp && event.emoji && <span className="mr-1">{event.emoji}</span>}
-          <span>{event.title}</span> {/* No truncate here, let the cell width and word-wrap handle it */}
+          <span>{event.title}</span>
         </div>
       );
     }
 
-    // Default rendering for Month (Detailed), Week, Day views (as bars)
     return (
       <div className="flex items-center" title={event.title}>
         {event.isStamp && event.emoji && <span className="mr-1 text-xs">{event.emoji}</span>}
@@ -174,11 +169,8 @@ export const CalendarView = ({
     );
   };
 
-  // You had dayLayoutAlgorithm commented out, so I'll keep it that way unless you plan to use it.
-  // const dayLayoutAlgorithm = ... ;
-
   return (
-    <div className="h-[calc(100vh-200px)]"> {/* Ensure this height is appropriate */}
+    <div className="h-[calc(100vh-200px)]">
       <Calendar
         localizer={localizer}
         events={events}
@@ -186,25 +178,22 @@ export const CalendarView = ({
         endAccessor="end"
         allDayAccessor="allDay"
         style={{ height: '100%' }}
-        view={currentView} // Controlled by parent state
+        view={currentView}
         views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]}
-        date={currentDate} // Controlled by parent state
+        date={currentDate}
         onView={onView}
         onNavigate={onNavigate}
+        onRangeChange={onRangeChange} // Prop for CalendarPage to manage viewWindow
         onSelectEvent={onSelectEvent}
         onSelectSlot={onSelectSlot}
         selectable
         components={{
-          event: CustomEvent, // Use our view-aware CustomEvent
-          month: {
-            //dateCellWrapper: (props) => (
-             // <CustomDateCellWrapper {...props} events={events} isSimpleMode={isSimpleMode} />
-            //),
-          },
-          
+          event: CustomEvent,
+          dateCellWrapper: (props) => (
+            <CustomDateCellWrapper {...props} events={events} isSimpleMode={isSimpleMode} />
+          ),
         }}
-        eventPropGetter={eventPropGetter} // Use our view-aware eventPropGetter
-        // dayLayoutAlgorithm={dayLayoutAlgorithm} // If you re-enable, ensure it's compatible
+        eventPropGetter={eventPropGetter}
       />
     </div>
   );
