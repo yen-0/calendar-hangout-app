@@ -1,8 +1,8 @@
-# Calendar & Hangout App
+# Hangly (beta)
 
 ## Overview
 
-Welcome to the Calendar & Hangout App! This application provides a comprehensive solution for managing personal calendar events, creating custom "stamps" for recurring activities, and facilitating group scheduling through a unique "Hangout Request" feature. Users can visually organize their time, define reusable event templates (stamps), and easily find common availability with friends or colleagues.
+Welcome to hangly - the Calendar & Hangout App! This application provides a comprehensive solution for managing personal calendar events, creating custom "stamps" for recurring activities, and facilitating group scheduling through a unique "Hangout Request" feature. Users can visually organize their time, define reusable event templates (stamps), and easily find common availability with friends or colleagues.
 
 Built with Next.js and Firebase, this app offers a modern, responsive user experience with real-time data synchronization and robust authentication.
 
@@ -162,9 +162,9 @@ Configure the Environment Variables in your Vercel project settings (same as you
 Add your Vercel deployment URL(s) (e.g., your-app.vercel.app and any custom domains) to the "Authorized domains" list in Firebase Authentication settings.
 Deploy!
 Contributing
-(Add guidelines here if you plan for others to contribute. E.g., branching strategy, code style, submitting pull requests.)
+
 Future Enhancements / To-Do
-(List features you plan to add from your "What's Next" list or other ideas)
+
 Full Timezone Support across the application.
 Advanced recurring event editing (edit series, this instance only, future instances).
 Push notifications for hangout updates.
@@ -172,19 +172,3 @@ User profile page with more settings.
 Drag-and-drop for stamps.
 Integration with external calendar services (Google Calendar, Outlook Calendar).
 License
-(Choose a license, e.g., MIT, Apache 2.0, or specify if it's proprietary)
-This project is licensed under the MIT License - see the LICENSE.md file for details. (If you add a LICENSE.md file)
-Replace placeholders like "MyAppName", "your-repository-url.git", Node.js version, and specific UI library details. You can also add screenshots or a GIF of the app in action to make the README more engaging!
-**Key Sections to Customize:**
-
-*   **Overview:** Briefly adjust if my summary isn't perfect.
-*   **Tech Stack:**
-    *   Specify if you used a particular UI component library (like Shadcn/UI, Material UI, Chakra UI) or if they are mostly custom with Tailwind.
-*   **Prerequisites:** Specify the Node.js version you used.
-*   **Setup - Firebase:** Make sure the Firebase setup steps are clear. You might want to link to a `firestore.rules` file if you have one committed (be careful not to commit overly permissive rules to a public repo).
-*   **Deployment:** Mention Vercel or your chosen platform.
-*   **Contributing:** If applicable.
-*   **Future Enhancements:** Copy relevant items from our "What's Next" discussions.
-*   **License:** Add one if it's an open-source project.
-
-This README provides a good starting point for someone new to your project or for your future self to quickly get reacquainted.
