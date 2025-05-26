@@ -152,23 +152,22 @@ Markdown
 npm run dev
 # or
 yarn dev
+```
 Use code with caution.
 Open http://localhost:3000 (or your configured port) to view it in your browser.
-Deployment
+# Deployment
 This application is optimized for deployment on platforms like Vercel (recommended for Next.js).
 Push your code to a Git repository (GitHub, GitLab, Bitbucket).
 Import your project into Vercel.
 Configure the Environment Variables in your Vercel project settings (same as your .env.local file).
 Add your Vercel deployment URL(s) (e.g., your-app.vercel.app and any custom domains) to the "Authorized domains" list in Firebase Authentication settings.
 Deploy!
-Contributing
 
-Future Enhancements / To-Do
-
+# Future Enhancements / To-Do
 Full Timezone Support across the application.
 Advanced recurring event editing (edit series, this instance only, future instances).
 Push notifications for hangout updates.
 User profile page with more settings.
 Drag-and-drop for stamps.
 Integration with external calendar services (Google Calendar, Outlook Calendar).
-License
+
