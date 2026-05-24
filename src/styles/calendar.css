@@ -1,5 +1,6 @@
 /* src/styles/calendar.css */
 @import 'react-big-calendar/lib/css/react-big-calendar.css';
+@import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 
 /* Optional: Customizations to make it blend better with Tailwind */
 .rbc-toolbar button {

@@ -1,11 +1,37 @@
-'use client'; // This marks the component as a Client Component
+'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase/config'; // Your Firebase auth instance
+import { createContext, ReactNode, useCallback, useContext, useEffect, useReducer } from 'react';
+import { onAuthStateChanged, signOut as firebaseSignOut, User } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
+import { auth } from '@/lib/firebase/config';
+import { useGuestMode } from './useGuestMode';
 
-interface AuthContextType {
+type AuthState =
+  | { status: 'loading'; user: null }
+  | { status: 'authenticated'; user: User }
+  | { status: 'anonymous'; user: null };
+
+type AuthAction =
+  | { type: 'firebaseUser'; user: User }
+  | { type: 'firebaseNoUser' }
+  | { type: 'signedOut' };
+
+const initialState: AuthState = { status: 'loading', user: null };
+
+function reducer(state: AuthState, action: AuthAction): AuthState {
+  switch (action.type) {
+    case 'firebaseUser':
+      return { status: 'authenticated', user: action.user };
+    case 'firebaseNoUser':
+      return { status: 'anonymous', user: null };
+    case 'signedOut':
+      return { status: 'anonymous', user: null };
+    default:
+      return state;
+  }
+}
+
+interface AuthContextValue {
   user: User | null;
   loading: boolean;
   isGuest: boolean;
@@ -13,71 +39,59 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isGuest, setIsGuest] = useState(false);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [state, dispatch] = useReducer(reducer, initialState);
+  const { isGuest, setIsGuest } = useGuestMode();
   const router = useRouter();
 
   useEffect(() => {
-    // Check for guest status from localStorage
-    const guestStatus = localStorage.getItem('isGuest') === 'true';
-    setIsGuest(guestStatus);
-    if (guestStatus) {
-      setUser(null); // Ensure no Firebase user if guest
-    }
-
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        setUser(firebaseUser);
-        setIsGuest(false); // If a user logs in, they are no longer a guest
-        localStorage.removeItem('isGuest');
-      } else if (!guestStatus) { // Only set user to null if not in guest mode
-        setUser(null);
+        // A real Firebase user supersedes guest mode.
+        setIsGuest(false);
+        dispatch({ type: 'firebaseUser', user: firebaseUser });
+      } else {
+        dispatch({ type: 'firebaseNoUser' });
       }
-      setLoading(false);
     });
+    return unsubscribe;
+  }, [setIsGuest]);
 
-    return () => unsubscribe();
-  }, []);
-
-  const signInAsGuest = () => {
-    setUser(null); // No Firebase user for guests
+  const signInAsGuest = useCallback(() => {
     setIsGuest(true);
-    localStorage.setItem('isGuest', 'true');
-    setLoading(false);
-    router.push('/calendar'); // Or your main app page
-  };
+    router.push('/calendar');
+  }, [router, setIsGuest]);
 
-  const signOut = async () => {
-    setLoading(true);
+  const signOut = useCallback(async () => {
     try {
       await firebaseSignOut(auth);
-      setUser(null);
-      setIsGuest(false);
-      localStorage.removeItem('isGuest');
-      router.push('/sign-in');
-    } catch (error) {
-      console.error("Error signing out: ", error);
-      // Handle sign-out error appropriately
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown sign-out error';
+      console.error('Error signing out:', message);
+      throw err instanceof Error ? err : new Error(message);
     }
+    setIsGuest(false);
+    dispatch({ type: 'signedOut' });
+    router.push('/sign-in');
+  }, [router, setIsGuest]);
+
+  const value: AuthContextValue = {
+    user: state.user,
+    loading: state.status === 'loading',
+    isGuest,
+    signInAsGuest,
+    signOut,
   };
 
-  return (
-    <AuthContext.Provider value={{ user, loading, isGuest, signInAsGuest, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
 
-export const useAuth = (): AuthContextType => {
+export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-};
+}

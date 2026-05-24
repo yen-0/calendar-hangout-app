@@ -1,14 +1,10 @@
-// next.config.mjs
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // ... other configurations
-  devIndicators: {
-    buildActivity: true, // Optional: shows build activity indicator
-    buildActivityPosition: 'bottom-right', // Optional
-  },
-  // Add this for the cross-origin warning
-  experimental: {
-    allowedDevOrigins: ["http://192.168.56.1:3000"], // Replace 3000 with your dev server port if different
+  // Next 15.1's bundled `next lint` invokes ESLint with legacy options (`useEslintrc`,
+  // `extensions`) that ESLint 9 removed. Skipping lint *during build* avoids that crash;
+  // CI runs `npm run lint` (eslint directly against our flat config) as the canonical gate.
+  eslint: {
+    ignoreDuringBuilds: true,
   },
 };
 

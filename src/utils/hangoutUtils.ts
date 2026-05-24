@@ -1,29 +1,46 @@
 // src/utils/hangoutUtils.ts
-import { CalendarEvent } from '@/types/events';
+import { CalendarEvent, StampAvailability } from '@/types/events';
 import {
-    DateRangeClient,
-    TimeRange,
-    ParticipantEventClient,
-    HangoutRequestClientState,
-    CommonSlotClient,
-    ParticipantDataClient
+  DateRangeClient,
+  TimeRange,
+  ParticipantEventClient,
+  HangoutRequestClientState,
+  CommonSlotClient,
 } from '@/types/hangouts';
 import { expandRecurringEvents } from './eventUtils';
+
+/**
+ * For an event in the user's calendar, resolve the stampAvailability of its
+ * source stamp (if any). Returns:
+ *  - 'busy' for non-stamp events and stamps with no/explicit busy setting.
+ *  - 'free' for events whose source stamp is marked stampAvailability='free'.
+ *    These should be SKIPPED entirely when computing availability.
+ *  - 'tentative' for events whose source stamp is 'tentative'. These still
+ *    block, but get flagged so future scoring can downweight overlap.
+ */
+const resolveAvailability = (
+  event: CalendarEvent,
+  masterStampsById: Map<string, CalendarEvent>,
+): StampAvailability => {
+  if (event.originalStampId) {
+    const master = masterStampsById.get(event.originalStampId);
+    if (master?.stampAvailability) return master.stampAvailability;
+  }
+  if (event.isStamp && event.stampAvailability) return event.stampAvailability;
+  return 'busy';
+};
 import {
-    setHours,
-    setMinutes,
-    setSeconds,
-    parse as parseTime,
-    startOfDay,
-    endOfDay, // You used endOfDay, ensure it's imported if needed, or stick to startOfDay logic
-    addMinutes,
-    isBefore,
-    isAfter,
-    isEqual,
-    format,
-    getHours,    // <--- IMPORT getHours
-    getMinutes,  // <--- IMPORT getMinutes
-    // getSeconds // <--- IMPORT getSeconds if you use it (not in current logic)
+  setHours,
+  setMinutes,
+  setSeconds,
+  parse as parseTime,
+  startOfDay,
+  addMinutes,
+  isBefore,
+  isAfter,
+  isEqual,
+  getHours,
+  getMinutes,
 } from 'date-fns';
 
 // ... (rest of the imports and interfaces if any locally defined)
@@ -47,6 +64,13 @@ export const prepareCreatorEventsForRequest = (
 
   if (!overallStart || !overallEnd) return [];
 
+  // Build a lookup so stamp instances can resolve their availability via their
+  // originating definition (which holds stampAvailability, not the instance).
+  const masterStampsById = new Map<string, CalendarEvent>();
+  for (const e of userEvents) {
+    if (e.isStamp && !e.originalStampId) masterStampsById.set(e.id, e);
+  }
+
   const expandedUserEvents = expandRecurringEvents(userEvents, overallStart, overallEnd);
 
   for (const reqDR of requestDateRanges) {
@@ -62,13 +86,16 @@ export const prepareCreatorEventsForRequest = (
         // Use the imported getHours and getMinutes
         const dayTimeSlotStart = setSeconds(setMinutes(setHours(currentDate, getHours(timeRangeStartDateObj)), getMinutes(timeRangeStartDateObj)), 0);
         const dayTimeSlotEnd = setSeconds(setMinutes(setHours(currentDate, getHours(timeRangeEndDateObj)), getMinutes(timeRangeEndDateObj)), 0);
-        
+
         if (isEqual(dayTimeSlotEnd, dayTimeSlotStart) || isBefore(dayTimeSlotEnd, dayTimeSlotStart)) {
             // console.warn(`Skipping invalid time range for day ${format(currentDate, 'yyyy-MM-dd')}: ${reqTR.start} - ${reqTR.end}`);
             continue;
         }
 
         expandedUserEvents.forEach(event => {
+          const availability = resolveAvailability(event, masterStampsById);
+          if (availability === 'free') return; // explicitly available; do not block
+
           const eventStart = event.start;
           const eventEnd = event.end;
           const overlaps = isBefore(eventStart, dayTimeSlotEnd) && isAfter(eventEnd, dayTimeSlotStart);
@@ -76,12 +103,13 @@ export const prepareCreatorEventsForRequest = (
           if (overlaps) {
             const actualStart = isBefore(eventStart, dayTimeSlotStart) ? dayTimeSlotStart : eventStart;
             const actualEnd = isAfter(eventEnd, dayTimeSlotEnd) ? dayTimeSlotEnd : eventEnd;
-            
+
             if (isAfter(actualEnd, actualStart)) {
                  relevantEvents.push({
                     title: event.title,
                     start: actualStart,
                     end: actualEnd,
+                    ...(availability === 'tentative' ? { tentative: true } : {}),
                 });
             }
           }
@@ -90,7 +118,7 @@ export const prepareCreatorEventsForRequest = (
       currentDate = addMinutes(currentDate, 24 * 60);
     }
   }
-  
+
   const uniqueEventsMap = new Map<string, ParticipantEventClient>();
   relevantEvents.forEach(event => {
     const key = `${event.title}_${event.start.toISOString()}_${event.end.toISOString()}`;
@@ -110,12 +138,16 @@ export const prepareCreatorEventsForRequest = (
 // This one is FINE because parseInt(dayStartTimeStr[0]) directly gives you the hour number.
 
 const isParticipantFree = (
-  participantEvents: ParticipantEventClient[], 
+  participantEvents: ParticipantEventClient[],
   intervalStart: Date,
   intervalEnd: Date
 ): boolean => {
-  for (const event of participantEvents) { 
+  for (const event of participantEvents) {
     if (isBefore(event.start, intervalEnd) && isAfter(event.end, intervalStart)) {
+      // TODO(stamp-availability scoring): tentative events currently block like
+      // busy ones. A future pass should let them through here and emit a
+      // confidence/score on the resulting CommonSlotClient so downstream UI
+      // can warn rather than hide.
       return false;
     }
   }

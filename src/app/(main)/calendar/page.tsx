@@ -1,663 +1,627 @@
-// src/app/(main)/calendar/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { CalendarEvent } from '@/types/events';
-import { View, Views } from 'react-big-calendar';
+import { isSameDay } from 'date-fns';
+import { CalendarEvent, CalendarEventUpdate } from '@/types/events';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import Modal from '@/components/ui/modal';
-import DayDetailsModal from '@/components/calendar/DayDetailsModal';
-import '@/styles/calendar.css';
-import { isSameDay } from 'date-fns'; // isWithinInterval might be needed for allDay in eventsForSelectedDay
-import {
-  fetchCalendarItems,
-  addCalendarItem,
-  updateCalendarItem,
-  deleteCalendarItem
-} from '@/lib/firebase/firestoreService';
+import { showActionToast, showErrorToast, showInfoToast, showSuccessToast } from '@/lib/toasts';
 import { expandRecurringEvents } from '@/utils/eventUtils';
-import { addDays, startOfWeek, endOfWeek, startOfDay, endOfDay } from 'date-fns';
-import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toasts'; 
+import { buildStampUsageMap } from '@/utils/stampStats';
+import { presetToStamp } from '@/lib/stampPresets';
+import { useCalendarStore } from '@/hooks/useCalendarStore';
+import { useCalendarView } from '@/hooks/useCalendarView';
+import { useTravelBuffers } from '@/hooks/useTravelBuffers';
+import { useUserPreferences } from '@/hooks/useUserPreferences';
+import { useGoogleCalendarEvents, useGoogleStatus } from '@/lib/queries/google';
+import { CalendarPageHeader } from '@/components/calendar/CalendarPageHeader';
+import { StampPaletteSheet } from '@/components/calendar/StampPaletteSheet';
+import { StampPlacementChip } from '@/components/calendar/StampPlacementChip';
+import { EventDialog } from '@/components/calendar/EventDialog';
+import { StampDialog } from '@/components/calendar/StampDialog';
+import { StampDeleteDialog } from '@/components/calendar/StampDeleteDialog';
+import { StampPackShareDialog } from '@/components/calendar/StampPackShareDialog';
+import DayDetailsModal from '@/components/calendar/DayDetailsModal';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
+import '@/styles/calendar.css';
 
-// --- TOP-LEVEL DYNAMIC IMPORTS ---
 const DynamicCalendarView = dynamic(
-  () => import('@/components/calendar/CalendarView').then(mod => mod.CalendarView),
+  () => import('@/components/calendar/CalendarView').then((mod) => mod.CalendarView),
   {
     ssr: false,
     loading: () => (
       <div className="flex justify-center items-center h-[calc(100vh-200px)]">
-        <p className="text-gray-500">Loading Calendar...</p>
+        <p className="text-gray-500">Loading Calendar…</p>
       </div>
     ),
-  }
+  },
 );
 
-const DynamicEventForm = dynamic(
-    () => import('@/components/calendar/EventForm'),
-    {
-      ssr: false,
-      loading: () => <p className="p-6 text-center">Loading form...</p>,
-    }
-);
-
-const DynamicStampForm = dynamic(
-  () => import('@/components/calendar/StampForm'),
-  { ssr: false, loading: () => <p className="p-6 text-center">Loading stamp form...</p> }
-);
-// --- END TOP-LEVEL DYNAMIC IMPORTS ---
-
-const getMockEvents = (): CalendarEvent[] => {
-  const today = new Date();
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-  const dayAfter = new Date(today); dayAfter.setDate(today.getDate() + 2); dayAfter.setHours(12,0,0,0);
-  const nextWeek = new Date(today); nextWeek.setDate(today.getDate() + 7);
-  return [
-    { id: '1', title: 'Team Meeting', start: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 10, 0, 0), end: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 11, 0, 0), color: '#2563eb' },
-    { id: '2', title: 'Gym Session', start: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 18, 0, 0), end: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 19, 0, 0), color: '#16a34a', isStamp: true, emoji: '🏋️' },
-    { id: '3', title: 'Project Deadline', start: dayAfter, end: dayAfter, allDay: true, color: '#dc2626' },
-    { id: '4', title: 'Weekend Getaway', start: nextWeek, end: new Date(nextWeek.getFullYear(), nextWeek.getMonth(), nextWeek.getDate() + 2), allDay: true, color: '#f97316'},
-    { id: '5', title: 'Lunch with Client', start: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 30, 0), end: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 13, 30, 0), color: '#f59e0b'},
-  ];
-};
+type PendingDelete = { id: string; type: 'event' | 'stamp' };
 
 export default function CalendarPage() {
-    // --- CORE STATE ---
-      const { user, isGuest, loading: authLoading } = useAuth(); // Get user and authLoading
-    const [events, setEvents] = useState<CalendarEvent[]>([]);
-    const [currentView, setCurrentView] = useState<View>('month');
-    const [currentDate, setCurrentDate] = useState(() => new Date());
-    const [isSimpleMode, setIsSimpleMode] = useState(true);
+  const { user, isGuest } = useAuth();
+  const store = useCalendarStore();
+  const { view, date, viewWindow, handleNavigate, handleViewChange } = useCalendarView('month');
+  const { prefs } = useUserPreferences();
 
-    // --- EVENT FORM MODAL STATE ---
-    const [isEventModalOpen, setIsEventModalOpen] = useState(false);
-    const [selectedEventForForm, setSelectedEventForForm] = useState<CalendarEvent | null>(null);
-    const [eventModalMode, setEventModalMode] = useState<'create' | 'edit'>('create');
-    const [defaultModalDates, setDefaultModalDates] = useState<{ start: Date, end: Date } | null>(null);
+  const [isSimpleMode, setIsSimpleMode] = useState(true);
+  const [eventDialog, setEventDialog] = useState<{
+    open: boolean;
+    mode: 'create' | 'edit';
+    event: CalendarEvent | null;
+    defaultStart?: Date;
+    defaultEnd?: Date;
+  }>({ open: false, mode: 'create', event: null });
+  const [stampDialog, setStampDialog] = useState<{ open: boolean; stamp: CalendarEvent | null }>({
+    open: false,
+    stamp: null,
+  });
+  const [dayDetails, setDayDetails] = useState<{ open: boolean; date: Date | null }>({
+    open: false,
+    date: null,
+  });
+  const [selectedStampForPlacement, setSelectedStampForPlacement] = useState<CalendarEvent | null>(
+    null,
+  );
+  // Holds the stamp currently mid-drag from the palette. Ref because RBC's
+  // onDropFromOutside reads it during a synchronous drop callback and we don't
+  // want the drop handler to be re-created on every drag.
+  const draggedStampRef = useRef<CalendarEvent | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
 
-    // --- DAY DETAILS MODAL STATE ---
-    const [isDayDetailsModalOpen, setIsDayDetailsModalOpen] = useState(false);
-    const [dateForDetailsModal, setDateForDetailsModal] = useState<Date | null>(null);
+  const isSignedIn = !!user && !isGuest;
+  const { data: googleStatus } = useGoogleStatus(isSignedIn);
+  const { data: gcalEvents = [] } = useGoogleCalendarEvents(
+    viewWindow,
+    isSignedIn && !!googleStatus?.connected,
+  );
 
-    // --- STAMP FORM MODAL STATE ---
-    const [isStampFormModalOpen, setIsStampFormModalOpen] = useState(false);
-    const [selectedStampForEditing, setSelectedStampForEditing] = useState<CalendarEvent | null>(null);
-
-    // --- STAMP PLACEMENT STATE ---
-    const [selectedStampForPlacement, setSelectedStampForPlacement] = useState<CalendarEvent | null>(null);
-
-  const [isLoadingEvents, setIsLoadingEvents] = useState(true); // New loading state for events
-const [viewWindow, setViewWindow] = useState<{ start: Date, end: Date } | null>(null);
-  const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<{ id: string, type: 'event' | 'stamp' } | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false); // Loading state for delete operation
-useEffect(() => {
-    const loadEvents = async () => {
-
-      if (authLoading) {
-        return;
-      }
-      if (user && !isGuest) { // User is authenticated
-
-        setIsLoadingEvents(true);
-        try {
-          const userEvents = await fetchCalendarItems(user.uid);
-          setEvents(userEvents);
-        } catch (error) {
-          console.error("[EFFECT loadEvents] Failed to load events for user:", error);
-          showErrorToast("Could not load your calendar data.");
-          setEvents([]); // Clear events on error
-        } finally {
-          setIsLoadingEvents(false);
-        }
-      } else if (isGuest) { // Guest mode
-        setIsLoadingEvents(true); // It's still a "load" operation
-        const mockEvents = getMockEvents();
-        setEvents(mockEvents);
-        setIsLoadingEvents(false);
-      } else { // No user, not guest (e.g., logged out, or auth still loading just finished and user is null)
-
-        setEvents([]); // THIS IS THE LINE THAT CLEARS EVENTS
-        setIsLoadingEvents(false); // We are "done" loading (or clearing)
-      }
-    };
-
-    loadEvents();
-}, [user, isGuest, authLoading]); // Depend on user, isGuest, and authLoading
+  // Soft-deleted stamp definitions stay in Firestore (so their already-placed
+  // instances remain coherent) but should not surface in the palette, nor
+  // generate any new recurrence occurrences.
+  const visibleEvents = useMemo(
+    () => store.events.filter((e) => !(e.isStamp && !e.originalStampId && e.stampDeletedAt)),
+    [store.events],
+  );
 
   const displayedEvents = useMemo(() => {
-    if (!viewWindow || events.length === 0) {
-      // If no view window yet, or no base events, return base events
-      // or an empty array until viewWindow is set.
-      // RBC might show current month by default before first onNavigate.
-      return events; 
+    const expandedLocal =
+      viewWindow && visibleEvents.length > 0
+        ? expandRecurringEvents(visibleEvents, viewWindow.start, viewWindow.end)
+        : visibleEvents;
+    return [...expandedLocal, ...gcalEvents];
+  }, [visibleEvents, viewWindow, gcalEvents]);
+
+  const travelBuffers = useTravelBuffers(displayedEvents, prefs.locationFeaturesEnabled);
+
+  const masterStamps = useMemo(
+    () => visibleEvents.filter((e) => e.isStamp && !e.originalStampId),
+    [visibleEvents],
+  );
+
+  const stampUsage = useMemo(() => buildStampUsageMap(store.events), [store.events]);
+
+  /**
+   * Top stamps to surface in the day right-click context menu:
+   * pinned first, then by total usage. Capped at 5 for menu readability.
+   */
+  const contextMenuStamps = useMemo(() => {
+    const sorted = [...masterStamps].sort((a, b) => {
+      if (!!a.stampPinned !== !!b.stampPinned) return a.stampPinned ? -1 : 1;
+      const aUse = stampUsage.get(a.id)?.total ?? 0;
+      const bUse = stampUsage.get(b.id)?.total ?? 0;
+      if (aUse !== bUse) return bUse - aUse;
+      return a.title.localeCompare(b.title);
+    });
+    return sorted.slice(0, 5);
+  }, [masterStamps, stampUsage]);
+
+  const existingCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of masterStamps) {
+      if (s.stampCategory) set.add(s.stampCategory);
     }
-    return expandRecurringEvents(events, viewWindow.start, viewWindow.end);
-  }, [events, viewWindow]);
+    return Array.from(set).sort();
+  }, [masterStamps]);
 
-    const masterStamps = useMemo(() => {
-        return events.filter(event => event.isStamp && !event.originalStampId);
-    }, [events]);
+  const eventsForSelectedDay = useMemo(() => {
+    if (!dayDetails.date) return [];
+    const target = dayDetails.date;
+    return displayedEvents.filter((event) => {
+      const startDay = new Date(new Date(event.start).setHours(0, 0, 0, 0));
+      const targetDay = new Date(new Date(target).setHours(0, 0, 0, 0));
+      if (event.allDay && event.start && event.end) {
+        const endDay = new Date(new Date(event.end).setHours(0, 0, 0, 0));
+        return targetDay >= startDay && targetDay <= endDay;
+      }
+      return isSameDay(startDay, targetDay);
+    });
+  }, [dayDetails.date, displayedEvents]);
 
-    // --- HANDLERS (MEMOIZED WITH useCallback) ---
+  const openCreateEvent = useCallback((slot?: { start: Date; end: Date }) => {
+    setEventDialog({
+      open: true,
+      mode: 'create',
+      event: null,
+      defaultStart: slot?.start,
+      defaultEnd: slot?.end,
+    });
+  }, []);
 
-    const openModalForCreate = useCallback((slotInfo?: { start: Date; end: Date }) => {
-        setSelectedEventForForm(null); setEventModalMode('create');
-        setDefaultModalDates(slotInfo ? { start: slotInfo.start, end: slotInfo.end } : null);
-        setIsEventModalOpen(true);
-    }, []);
+  const openEditEvent = useCallback((event: CalendarEvent) => {
+    setEventDialog({ open: true, mode: 'edit', event });
+  }, []);
 
-    const openModalForEdit = useCallback((eventToEdit: CalendarEvent) => {
-        setSelectedEventForForm(eventToEdit); setEventModalMode('edit');
-        setDefaultModalDates(null); setIsEventModalOpen(true);
-    }, []);
+  const closeEventDialog = useCallback(
+    () => setEventDialog((s) => ({ ...s, open: false })),
+    [],
+  );
 
-    const closeEventFormModal = useCallback(() => setIsEventModalOpen(false), []);
-
-    const handleSaveEvent = useCallback(async (eventData: Omit<CalendarEvent, 'id' | 'isStamp' | 'emoji' | 'repeatDays' | 'repeatEndDate' | 'originalStampId' | 'occurrenceDate'> & { id?: string }) => {
-    if (!user && !isGuest) { alert("Please sign in to save events."); return; }
-
-    const fullEventData = { // Ensure no stamp-specific fields are accidentally included for regular events
-        ...eventData, 
-        isStamp: false, 
-        allDay: eventData.allDay || false, 
-        // Explicitly set potentially undefined stamp fields to undefined or null
-        emoji: undefined,
-        repeatDays: undefined,
-        repeatEndDate: undefined,
-        originalStampId: undefined,
-        occurrenceDate: undefined
-    };
-
-
-    if (eventModalMode === 'edit' && eventData.id) { // Editing existing event
-        const eventId = eventData.id;
-        if (user && !isGuest) {
-            try {
-                await updateCalendarItem(user.uid, eventId, fullEventData);
-                setEvents(prev => prev.map(ev => ev.id === eventId ? { ...ev, ...fullEventData, id: eventId } as CalendarEvent : ev));
-                showSuccessToast("Event updated successfully!");
-            } catch (error) { console.error("Error updating event:", error); showErrorToast("Failed to update event."); }
-        } else { // Guest mode - local update
-            setEvents(prev => prev.map(ev => ev.id === eventId ? { ...ev, ...fullEventData, id: eventId } as CalendarEvent : ev));
-            showSuccessToast("Event updated successfully!");
-        }
-    } else { // Creating new event
-        const dataToSave: Omit<CalendarEvent, 'id'> = {
-            ...fullEventData,
-            start: new Date(fullEventData.start!), // Ensure Date objects if coming from form
-            end: new Date(fullEventData.end!),
-        };
-        if (user && !isGuest) {
-            try {
-                const newId = await addCalendarItem(user.uid, dataToSave);
-                setEvents(prev => [...prev, { ...dataToSave, id: newId }]);
-                showSuccessToast("Event added successfully!");
-            } catch (error) { console.error("Error adding event:", error); showErrorToast("Failed to add event."); }
-        } else { // Guest mode - local add
-            const newId = String(Date.now() + Math.random());
-            setEvents(prev => [...prev, { ...dataToSave, id: newId }]);
-            showSuccessToast("Event added successfully!");
-        }
-    }
-    closeEventFormModal();
-}, [eventModalMode, closeEventFormModal, user, isGuest]);
-
-    const handleDeleteEvent = useCallback(async (eventId: string) => {
-    if (!user && !isGuest) { alert("Please sign in to delete events."); return; }
-
-    if (user && !isGuest) {
-        try {
-            await deleteCalendarItem(user.uid, eventId);
-            setEvents(prev => prev.filter(ev => ev.id !== eventId));
-            showSuccessToast("Event deleted successfully!");
-        } catch (error) { console.error("Error deleting event:", error); showErrorToast("Failed to delete event."); }
-    } else { // Guest mode - local delete
-        setEvents(prev => prev.filter(ev => ev.id !== eventId));
-        showSuccessToast("Event deleted successfully!");
-    }
-    closeEventFormModal();
-}, [closeEventFormModal, user, isGuest]);
-
-    const openDayDetailsModal = useCallback((date: Date) => {
-        setDateForDetailsModal(date); setIsDayDetailsModalOpen(true);
-    }, []);
-
-    const closeDayDetailsModal = useCallback(() => {
-        setIsDayDetailsModalOpen(false); setDateForDetailsModal(null);
-    }, []);
-
-    const handleAddEventFromDetails = useCallback((date: Date) => {
-        closeDayDetailsModal();
-        const startOfDay = new Date(date); startOfDay.setHours(9,0,0,0);
-        const endOfDay = new Date(date); endOfDay.setHours(10,0,0,0);
-        openModalForCreate({ start: startOfDay, end: endOfDay });
-    }, [closeDayDetailsModal, openModalForCreate]);
-
-    const handleEditEventFromDetails = useCallback((eventToEdit: CalendarEvent) => {
-        closeDayDetailsModal(); openModalForEdit(eventToEdit);
-    }, [closeDayDetailsModal, openModalForEdit]);
-
-    const openStampFormToCreate = useCallback(() => {
-        setSelectedStampForEditing(null); setIsStampFormModalOpen(true);
-    }, []);
-
-    const openStampFormToEdit = useCallback((stampToEdit: CalendarEvent) => {
-        setSelectedStampForEditing(stampToEdit); setIsStampFormModalOpen(true);
-    }, []);
-
-    const closeStampFormModal = useCallback(() => setIsStampFormModalOpen(false), []);
-
-    const handleSaveStamp = useCallback(async (stampData: Omit<CalendarEvent, 'id'> & { id?: string }) => {
-    if (!user && !isGuest) { alert("Please sign in to save stamps."); return; }
-
-    const fullStampData: Omit<CalendarEvent, 'id'> = { // Ensure all relevant fields for a master stamp
-        ...stampData,
-        isStamp: true,
-        allDay: stampData.allDay || false, // Or typically false for stamps if duration is key
-        start: new Date(stampData.start!),
-        end: new Date(stampData.end!),
-        repeatEndDate: stampData.repeatEndDate ? new Date(stampData.repeatEndDate) : undefined,
-        // occurrenceDate and originalStampId should NOT be on master stamps
-        occurrenceDate: undefined, 
-        originalStampId: undefined,
-    };
-
-    if (stampData.id) { // Editing existing stamp definition
-        const stampIdToEdit = stampData.id;
- 
-        const existingStampIndex = events.findIndex(ev => ev.id === stampIdToEdit);
-        if (existingStampIndex === -1) {
-            console.error(`[handleSaveStamp - EDIT] STAMP WITH ID ${stampIdToEdit} NOT FOUND IN 'events' STATE!`);
-            showErrorToast("Error: Could not find the stamp to update.");
-            closeStampFormModal();
-            return;
-        }
-        if (user && !isGuest) {
-            try {
-                await updateCalendarItem(user.uid, stampIdToEdit, fullStampData); // Pass fullStampData to Firestore
-                // Prepare the new events array
-                const updatedEventsArray = events.map(ev =>
-                    ev.id === stampIdToEdit ? { ...ev, ...fullStampData, id: stampIdToEdit } as CalendarEvent : ev
-                );
-                setEvents(updatedEventsArray);
-
-                // --- DEBUG LOGGING (Option 1) ---
-                const updatedStampFromPreparedArray = updatedEventsArray.find(e => e.id === stampIdToEdit);
-                
-                showSuccessToast("Stamp updated successfully!");            } catch (error) {console.error("Error updating stamp:", error); showErrorToast("Failed to update stamp."); }
-        } else { // Guest mode
-            setEvents(prev => prev.map(ev => ev.id === stampIdToEdit ? { ...ev, ...fullStampData, id: stampIdToEdit } as CalendarEvent : ev));
-            showSuccessToast("Stamp updated successfully!");
-        }
-    } else { // Creating new stamp definition
-        if (user && !isGuest) {
-            try {
-                const newId = await addCalendarItem(user.uid, fullStampData);
-                setEvents(prev => [...prev, { ...fullStampData, id: newId }]);
-                showSuccessToast("Stamp added successfully!");
-            } catch (error) { console.error("Error adding stamp:", error);  showErrorToast("Failed to add stamp."); }
-        } else { // Guest mode
-            const newId = String(Date.now() + Math.random() + "-stamp");
-            setEvents(prev => [...prev, { ...fullStampData, id: newId }]);
-            showSuccessToast("Stamp added successfully!");
-        }
-    }
-    closeStampFormModal();
-}, [closeStampFormModal, user, isGuest]);
-
-    const handleDeleteStamp = useCallback(async (stampId: string) => {
-    if (!user && !isGuest) { alert("Please sign in to delete stamps."); return; }
-
-    // IMPORTANT: When deleting a master stamp, you also need to decide what to do with
-    // all its applied instances (events with originalStampId === stampId).
-    // Option 1: Delete them all (requires another Firestore query and batch delete).
-    // Option 2: Leave them as "orphaned" events.
-    // Option 3: Prevent deletion if instances exist.
-    // For now, we'll just delete the master. This needs to be expanded for production.
-    console.warn(`Deleting master stamp ${stampId}. Consider implementing deletion of its instances.`);
-
-    if (user && !isGuest) {
-        try {
-            await deleteCalendarItem(user.uid, stampId);
-            setEvents(prev => prev.filter(ev => ev.id !== stampId));
-            // Also remove any applied instances from local state for immediate UI update
-            setEvents(prev => prev.filter(ev => ev.originalStampId !== stampId));
-            showSuccessToast("Stamp deleted successfully!");
-        } catch (error) { console.error("Error deleting stamp:", error);  showErrorToast("Failed to delete stamp."); }
-    } else { // Guest mode
-        setEvents(prev => prev.filter(ev => ev.id !== stampId));
-        setEvents(prev => prev.filter(ev => ev.originalStampId !== stampId));
-        showSuccessToast("Stamp deleted successfully!");
-    }
-
-    if (selectedStampForPlacement?.id === stampId) {
-        setSelectedStampForPlacement(null);
-    }
-    closeStampFormModal();
-}, [selectedStampForPlacement, closeStampFormModal, user, isGuest]);
-
-    const handleApplyStamp = useCallback(async (stampDefinition: CalendarEvent, date: Date) => {
-    if (!user && !isGuest) { alert("Please sign in to apply stamps."); return; }
-    if (!stampDefinition.isStamp) return;
-
-    // ... (logic to calculate newEventStart, newEventEnd from Step 6.1)
-    const stampStartTime = new Date(stampDefinition.start); const stampEndTime = new Date(stampDefinition.end);
-    const newEventStart = new Date(date); newEventStart.setHours(stampStartTime.getHours(), stampStartTime.getMinutes(), stampStartTime.getSeconds());
-    const newEventEnd = new Date(date); newEventEnd.setHours(stampEndTime.getHours(), stampEndTime.getMinutes(), stampEndTime.getSeconds());
-    const originalStartDay = new Date(stampDefinition.start).setHours(0,0,0,0);
-    const originalEndDay = new Date(stampDefinition.end).setHours(0,0,0,0);
-    if (originalEndDay > originalStartDay && newEventEnd.getTime() <= newEventStart.getTime()) {
-         newEventEnd.setDate(newEventEnd.getDate() + ( (originalEndDay - originalStartDay) / (1000 * 60 * 60 * 24) ) );
-    }
-
-    const newEventInstanceData: Omit<CalendarEvent, 'id'> = {
-      title: stampDefinition.title,
-      start: newEventStart,
-      end: newEventEnd,
-      allDay: stampDefinition.allDay, // Consider if allDay should be copied or stamps always have duration
-      color: stampDefinition.color,
-      isStamp: true, // It's an instance of a stamp
-      emoji: stampDefinition.emoji,
-      originalStampId: stampDefinition.id, // Link to the master stamp
-      occurrenceDate: newEventStart,
-      // These should NOT be on an instance
-      repeatDays: undefined,
-      repeatEndDate: undefined,
-    };
-
-    if (user && !isGuest) {
-        try {
-            const newId = await addCalendarItem(user.uid, newEventInstanceData);
-            setEvents(prev => [...prev, { ...newEventInstanceData, id: newId }]);
-            showInfoToast(`Stamp "${newEventInstanceData.title}" applied!`); // INFO TOAST
-        } catch (error) { console.error("Error applying stamp:", error); showErrorToast("Failed to apply stamp."); }
-    } else { // Guest mode
-        const newId = String(Date.now() + Math.random());
-        setEvents(prev => [...prev, { ...newEventInstanceData, id: newId }]);
-        showInfoToast(`Stamp "${newEventInstanceData.title}" applied!`); // INFO TOAST
-    }
-    // setSelectedStampForPlacement(null); // Optional: auto-deselect
-}, [user, isGuest]); // setEvents is stable, add other stable dependencies if any
-
-    const handleSelectSlot = useCallback((slotInfo: { start: Date; end: Date; action: string }) => {
-        if (selectedStampForPlacement) {
-            handleApplyStamp(selectedStampForPlacement, slotInfo.start); return;
-        }
-        if (slotInfo.action === 'click' || slotInfo.action === 'doubleClick') {
-            openDayDetailsModal(slotInfo.start);
-        } else if (slotInfo.action === 'select') {
-            openModalForCreate({ start: slotInfo.start, end: slotInfo.end });
-        }
-    }, [selectedStampForPlacement, handleApplyStamp, openDayDetailsModal, openModalForCreate]);
-
-    const handleSelectEvent = useCallback((eventClicked: CalendarEvent) => {
-        if (selectedStampForPlacement) {
-            handleApplyStamp(selectedStampForPlacement, eventClicked.start); return;
-        }
-        if (isSimpleMode && currentView === 'month') {
-            openDayDetailsModal(eventClicked.start);
+  const handleSaveEvent = useCallback(
+    async (data: CalendarEventUpdate & { id?: string; title?: string; start?: Date; end?: Date }) => {
+      if (!user && !isGuest) {
+        showErrorToast('Please sign in to save events.');
+        return;
+      }
+      try {
+        if (eventDialog.mode === 'edit' && data.id) {
+          const update: CalendarEventUpdate = {
+            ...data,
+            isStamp: false,
+            allDay: data.allDay || false,
+            start: data.start ? new Date(data.start) : undefined,
+            end: data.end ? new Date(data.end) : undefined,
+          };
+          await store.updateEvent(data.id, update);
+          showSuccessToast('Event updated successfully!');
         } else {
-            openModalForEdit(eventClicked);
+          if (!data.title || !data.start || !data.end) {
+            showErrorToast('Title, start, and end are required.');
+            return;
+          }
+          const newEvent: Omit<CalendarEvent, 'id'> = {
+            title: data.title,
+            start: new Date(data.start),
+            end: new Date(data.end),
+            allDay: data.allDay || false,
+            color: data.color ?? undefined,
+            isStamp: false,
+            // Strip nulls (only meaningful for updates) on create.
+            location: data.location ?? undefined,
+            travelMode: data.travelMode ?? undefined,
+          };
+          await store.addEvent(newEvent);
+          showSuccessToast('Event added successfully!');
         }
-    }, [isSimpleMode, currentView, selectedStampForPlacement, handleApplyStamp, openDayDetailsModal, openModalForEdit]);
+        closeEventDialog();
+      } catch (err) {
+        console.error('Error saving event:', err);
+        showErrorToast('Failed to save event.');
+      }
+    },
+    [user, isGuest, eventDialog.mode, store, closeEventDialog],
+  );
 
-    const eventsForSelectedDay = useMemo(() => {
-        if (!dateForDetailsModal) return [];
-        return displayedEvents.filter(event => {
-            const eventStartDay = new Date(new Date(event.start).setHours(0,0,0,0));
-            const detailsDateDay = new Date(new Date(dateForDetailsModal).setHours(0,0,0,0));
-            if (event.allDay && event.start && event.end) { // check event.start and event.end exist
-                const eventEndDay = new Date(new Date(event.end).setHours(0,0,0,0));
-                return detailsDateDay >= eventStartDay && detailsDateDay <= eventEndDay;
-            }
-            return isSameDay(eventStartDay, detailsDateDay);
-        });
-    }, [dateForDetailsModal, displayedEvents]);
+  const handleSaveStamp = useCallback(
+    async (data: CalendarEventUpdate & { id?: string; title: string; start: Date; end: Date }) => {
+      if (!user && !isGuest) {
+        showErrorToast('Please sign in to save stamps.');
+        return;
+      }
+      try {
+        if (data.id) {
+          const update: CalendarEventUpdate = {
+            ...data,
+            isStamp: true,
+            allDay: data.allDay || false,
+            start: new Date(data.start),
+            end: new Date(data.end),
+            repeatEndDate: data.repeatEndDate ? new Date(data.repeatEndDate) : undefined,
+          };
+          await store.updateEvent(data.id, update);
+          showSuccessToast('Stamp updated successfully!');
+        } else {
+          const newStamp: Omit<CalendarEvent, 'id'> = {
+            title: data.title,
+            start: new Date(data.start),
+            end: new Date(data.end),
+            allDay: data.allDay || false,
+            color: data.color ?? undefined,
+            isStamp: true,
+            emoji: data.emoji ?? undefined,
+            repeatDays: data.repeatDays ?? undefined,
+            repeatEndDate: data.repeatEndDate ? new Date(data.repeatEndDate) : undefined,
+            stampCategory: data.stampCategory ?? undefined,
+            stampAvailability: data.stampAvailability ?? undefined,
+            location: data.location ?? undefined,
+            travelMode: data.travelMode ?? undefined,
+          };
+          await store.addEvent(newStamp);
+          showSuccessToast('Stamp added successfully!');
+        }
+        setStampDialog({ open: false, stamp: null });
+      } catch (err) {
+        console.error('Error saving stamp:', err);
+        showErrorToast('Failed to save stamp.');
+      }
+    },
+    [user, isGuest, store],
+  );
 
-      const handleNavigate = useCallback((newDate: Date, view: View) => {
-    setCurrentDate(newDate); 
-    let start = new Date(newDate);
-    let end = new Date(newDate);
+  const handleApplyStamp = useCallback(
+    async (stamp: CalendarEvent, dropDate: Date) => {
+      if (!stamp.isStamp) return;
+      const stampStart = new Date(stamp.start);
+      const stampEnd = new Date(stamp.end);
+      const newStart = new Date(dropDate);
+      newStart.setHours(stampStart.getHours(), stampStart.getMinutes(), 0, 0);
+      const newEnd = new Date(dropDate);
+      newEnd.setHours(stampEnd.getHours(), stampEnd.getMinutes(), 0, 0);
 
-    if (view === 'month') {
-      start = new Date(start.getFullYear(), start.getMonth(), 1);
-      end = new Date(end.getFullYear(), end.getMonth() + 1, 0); // Last day of month
-      // Add buffer for events spilling from prev/next month
-      start = addDays(start, -7); 
-      end = addDays(end, 7);
-    } else if (view === 'week') {
-      start = startOfWeek(start, { weekStartsOn: 0 }); // Assuming week starts on Sunday
-      end = endOfWeek(end, { weekStartsOn: 0 });
-    } else if (view === 'day') {
-      start = startOfDay(start);
-      end = endOfDay(end);
-    }
+      const stampStartDay = new Date(stampStart).setHours(0, 0, 0, 0);
+      const stampEndDay = new Date(stampEnd).setHours(0, 0, 0, 0);
+      if (stampEndDay > stampStartDay && newEnd.getTime() <= newStart.getTime()) {
+        const dayDiff = (stampEndDay - stampStartDay) / (1000 * 60 * 60 * 24);
+        newEnd.setDate(newEnd.getDate() + dayDiff);
+      }
 
-    setViewWindow({ start, end });
-  }, []); 
+      const instance: Omit<CalendarEvent, 'id'> = {
+        title: stamp.title,
+        start: newStart,
+        end: newEnd,
+        allDay: stamp.allDay,
+        color: stamp.color,
+        isStamp: true,
+        emoji: stamp.emoji,
+        originalStampId: stamp.id,
+        occurrenceDate: newStart,
+        location: stamp.location,
+        travelMode: stamp.travelMode,
+      };
+      try {
+        const newId = await store.addEvent(instance);
+        showActionToast(
+          `Placed ${stamp.emoji ?? ''} ${instance.title}`.trim(),
+          'Undo',
+          () => {
+            void store
+              .deleteEvent(newId)
+              .catch((err) => {
+                console.error('Error undoing stamp placement:', err);
+                showErrorToast('Could not undo placement.');
+              });
+          },
+        );
+      } catch (err) {
+        console.error('Error applying stamp:', err);
+        showErrorToast('Failed to apply stamp.');
+      }
+    },
+    [store],
+  );
 
-  const handleViewChange = useCallback((newView: View) => {
-    setCurrentView(newView);
-    // Also trigger a re-calculation of viewWindow when view changes
-    // Call a similar logic as in handleNavigate or a dedicated function
-    // For simplicity, let's rely on the next onNavigate or an initial onRangeChange call from RBC
-    // This might need a slight delay or direct call to updateViewWindow(currentDate, newView)
-    // For now, we'll let the next navigation or initial load set the window.
-    // A more robust solution might use onRangeChange if available for all views.
-    
-    // Temporary: re-trigger navigate to update window. Not ideal.
-    // handleNavigate(currentDate, newView, 'VIEW_CHANGE');
-  }, [currentDate]); 
+  /**
+   * Apply a stamp to many days at once. One undo toast covers the whole batch.
+   * Adds are issued in parallel; partial failures are surfaced as a single
+   * error toast and don't roll back successful inserts (manual undo still works
+   * for those via the toast button).
+   */
+  const handleApplyStampMany = useCallback(
+    async (stamp: CalendarEvent, dropDates: Date[]) => {
+      if (!stamp.isStamp || dropDates.length === 0) return;
+      const stampStart = new Date(stamp.start);
+      const stampEnd = new Date(stamp.end);
+      const stampStartDay = new Date(stampStart).setHours(0, 0, 0, 0);
+      const stampEndDay = new Date(stampEnd).setHours(0, 0, 0, 0);
+      const multiDay = stampEndDay > stampStartDay;
+      const dayDiff = multiDay ? (stampEndDay - stampStartDay) / (1000 * 60 * 60 * 24) : 0;
 
-  // This is a more reliable way to get the view range from react-big-calendar
-  const handleRangeChange = useCallback((range: Date[] | { start: Date; end: Date }) => {
-    let start, end;
-    if (Array.isArray(range)) {
-        // For agenda view, it's often an array of dates
-        if (range.length > 0) {
-            start = startOfDay(range[0]);
-            // For agenda, the end might be the last day shown, or we might want a wider window.
-            // Let's assume it's the range of visible days.
-            end = endOfDay(range[range.length - 1]);
-        } else { return; } // No range
-    } else { // For month/week/day, it's usually {start, end}
-        start = startOfDay(range.start);
-        end = endOfDay(range.end);
-    }
-    // Add buffer for month view if necessary (events spanning across month boundaries)
-    if(currentView === Views.MONTH){
-        start = addDays(start, -7);
-        end = addDays(end, 7);
-    }
-    setViewWindow({ start, end });
-  }, [currentView]); // Added currentView
+      const instances: Omit<CalendarEvent, 'id'>[] = dropDates.map((dropDate) => {
+        const newStart = new Date(dropDate);
+        newStart.setHours(stampStart.getHours(), stampStart.getMinutes(), 0, 0);
+        const newEnd = new Date(dropDate);
+        newEnd.setHours(stampEnd.getHours(), stampEnd.getMinutes(), 0, 0);
+        if (multiDay) newEnd.setDate(newEnd.getDate() + dayDiff);
+        return {
+          title: stamp.title,
+          start: newStart,
+          end: newEnd,
+          allDay: stamp.allDay,
+          color: stamp.color,
+          isStamp: true,
+          emoji: stamp.emoji,
+          originalStampId: stamp.id,
+          occurrenceDate: newStart,
+          location: stamp.location,
+          travelMode: stamp.travelMode,
+        };
+      });
 
+      const results = await Promise.allSettled(instances.map((i) => store.addEvent(i)));
+      const newIds = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+      const failed = results.length - newIds.length;
+      if (failed > 0) showErrorToast(`Failed to place ${failed} of ${results.length}.`);
+      if (newIds.length === 0) return;
 
-  // Initialize viewWindow on first load
-  useEffect(() => {
-    if (!viewWindow && currentDate && currentView) {
-        // Calculate initial view window based on current date and view
-        let start = new Date(currentDate);
-        let end = new Date(currentDate);
-        if (currentView === 'month') {
-            start = new Date(start.getFullYear(), start.getMonth(), 1);
-            end = new Date(end.getFullYear(), end.getMonth() + 1, 0);
-            start = addDays(start, -7); end = addDays(end, 7);
-        } else if (currentView === 'week') {
-            start = startOfWeek(start, { weekStartsOn: 0 });
-            end = endOfWeek(end, { weekStartsOn: 0 });
-        } // etc. for day
-        setViewWindow({start, end});
-    }
-  }, [currentDate, currentView, viewWindow]); 
+      showActionToast(
+        `Placed ${newIds.length} × ${stamp.emoji ?? ''} ${stamp.title}`.trim(),
+        'Undo',
+        () => {
+          void Promise.allSettled(newIds.map((id) => store.deleteEvent(id))).then((r) => {
+            const failures = r.filter((x) => x.status === 'rejected').length;
+            if (failures > 0) showErrorToast(`Could not undo ${failures} placement(s).`);
+            else showInfoToast('Undone.');
+          });
+        },
+      );
+    },
+    [store],
+  );
 
+  const handleDropFromOutside = useCallback(
+    (slot: { start: Date | string; end: Date | string; allDay: boolean }) => {
+      const stamp = draggedStampRef.current;
+      if (!stamp) return;
+      const dropDate = slot.start instanceof Date ? slot.start : new Date(slot.start);
+      void handleApplyStamp(stamp, dropDate);
+      draggedStampRef.current = null;
+    },
+    [handleApplyStamp],
+  );
 
-    const toggleMode = () => setIsSimpleMode(prev => !prev);
-  const requestDeleteConfirmation = (id: string, type: 'event' | 'stamp') => {
-    setItemToDelete({ id, type });
-    setIsConfirmDeleteModalOpen(true);
-  };
+  const handleSelectSlot = useCallback(
+    (slot: { start: Date; end: Date; slots: Date[] | string[]; action: string }) => {
+      if (selectedStampForPlacement) {
+        // Range-paint: when the user drags across multiple cells with a stamp
+        // armed, place one instance per unique day. Single-cell taps still
+        // route through the cheaper single-apply path.
+        const dayKeys = new Set<string>();
+        const days: Date[] = [];
+        for (const raw of slot.slots ?? []) {
+          const d = raw instanceof Date ? raw : new Date(raw);
+          const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+          if (!dayKeys.has(key)) {
+            dayKeys.add(key);
+            days.push(d);
+          }
+        }
+        if (days.length > 1) {
+          void handleApplyStampMany(selectedStampForPlacement, days);
+        } else {
+          void handleApplyStamp(selectedStampForPlacement, slot.start);
+        }
+        return;
+      }
+      if (slot.action === 'click' || slot.action === 'doubleClick') {
+        setDayDetails({ open: true, date: slot.start });
+      } else if (slot.action === 'select') {
+        openCreateEvent({ start: slot.start, end: slot.end });
+      }
+    },
+    [selectedStampForPlacement, handleApplyStamp, handleApplyStampMany, openCreateEvent],
+  );
 
-  const closeConfirmDeleteModal = () => {
-    setIsConfirmDeleteModalOpen(false);
-    setItemToDelete(null);
-  };
+  const handleSelectEvent = useCallback(
+    (event: CalendarEvent) => {
+      // Synthetic travel chips aren't editable — they're computed from the
+      // adjacent real events.
+      const r = event.resource as { type?: string } | undefined;
+      if (r?.type === 'travel') return;
+      if (selectedStampForPlacement) {
+        void handleApplyStamp(selectedStampForPlacement, event.start);
+        return;
+      }
+      if (isSimpleMode && view === 'month') {
+        setDayDetails({ open: true, date: event.start });
+      } else {
+        openEditEvent(event);
+      }
+    },
+    [selectedStampForPlacement, handleApplyStamp, isSimpleMode, view, openEditEvent],
+  );
 
-  const confirmDeleteItem = async () => {
-    if (!itemToDelete) return;
+  const confirmEventDelete = useCallback(async () => {
+    if (!pendingDelete || pendingDelete.type !== 'event') return;
     setIsDeleting(true);
     try {
-      if (itemToDelete.type === 'event') {
-        await handleDeleteEvent(itemToDelete.id); // Your existing Firestore delete logic
-      } else if (itemToDelete.type === 'stamp') {
-        await handleDeleteStamp(itemToDelete.id); // Your existing Firestore delete logic
-      }
-    } catch (error) {
-      // Errors are already handled by showErrorToast within handleDeleteEvent/Stamp
-      console.error(`Error during confirmed delete of ${itemToDelete.type}:`, error);
+      await store.deleteEvent(pendingDelete.id);
+      showSuccessToast('Event deleted successfully!');
+      closeEventDialog();
+    } catch (err) {
+      console.error('Delete failed:', err);
+      showErrorToast('Failed to delete.');
     } finally {
       setIsDeleting(false);
-      closeConfirmDeleteModal();
+      setPendingDelete(null);
     }
-  };
-    // JSX Return
-    return (
-        <div className="p-2 md:p-6 flex flex-col md:flex-row gap-4">
-            {/* Left Column: Calendar View and Controls */}
-            <div className="flex-grow">
-                <div className="flex justify-between items-center mb-4">
-                    <h1 className="text-2xl font-semibold">
-                        {user ? `${user.displayName || user.email}'s Calendar` : 'Guest Calendar'}
-                    </h1>
-                    <div className="flex items-center space-x-2">
-                        <Button onClick={toggleMode} variant="outline" size="default">
-                            {isSimpleMode ? 'Show Detailed View' : 'Show Simple View'}
-                        </Button>
-                        <Button onClick={() => openModalForCreate()} size="default" className="bg-blue-600 hover:bg-blue-700 text-white">
-                            + Add Event
-                        </Button>
-                    </div>
-                </div>
-                <DynamicCalendarView
-                    events={displayedEvents}
-                    currentView={currentView}
-                    currentDate={currentDate}
-                    onView={handleViewChange}
-                    onNavigate={handleNavigate}
-                    //onRangeChange={handleRangeChange} // Add this prop to RBC
-                    onSelectEvent={handleSelectEvent}
-                    onSelectSlot={handleSelectSlot}
-                    isSimpleMode={isSimpleMode}
-                />
-            </div>
+  }, [pendingDelete, store, closeEventDialog]);
 
-            {/* Right Column: Stamp Palette */}
-            <div className="w-full md:w-64 lg:w-72 flex-shrink-0 bg-white p-4 rounded-lg shadow">
-                <div className="flex justify-between items-center border-b pb-2 mb-3">
-                    <h2 className="text-lg font-semibold">Your Stamps</h2>
-                    <Button onClick={openStampFormToCreate} size="sm" variant="outline" className="whitespace-nowrap">
-                        + New Stamp
-                    </Button>
-                </div>
-
-                {selectedStampForPlacement && (
-                    <div className="mb-3 p-2 text-sm bg-blue-100 border border-blue-300 rounded">
-                        Place <span className="font-semibold">"{selectedStampForPlacement.title}"</span> by clicking a date.
-                        <Button variant="ghost" size="sm" onClick={() => setSelectedStampForPlacement(null)} className="ml-2 text-blue-600 hover:text-blue-800 text-xs">Cancel</Button>
-                    </div>
-                )}
-                {!selectedStampForPlacement && masterStamps.length === 0 && (
-                     <p className="text-xs text-gray-500 mb-3 text-center py-2">No stamps defined yet. Click "+ New Stamp" to create one.</p>
-                )}
-                {!selectedStampForPlacement && masterStamps.length > 0 && (
-                    <p className="text-xs text-gray-500 mb-3">Click a stamp to select it, then click a date on the calendar to add.</p>
-                )}
-                
-                {masterStamps.length > 0 && (
-                    <div className="space-y-2 max-h-[calc(100vh-350px)] overflow-y-auto">
-                        {masterStamps.map(stamp => {
-                            const isSelectedToPlace = selectedStampForPlacement?.id === stamp.id;
-                            return (
-                                <div
-                                    key={stamp.id}
-                                    title={isSelectedToPlace ? `"${stamp.title}" is selected. Click a date to place it.` : `Select "${stamp.title}" to place on calendar.`}
-                                    className={`p-2 rounded border hover:bg-gray-100 flex items-center transition-all ${isSelectedToPlace ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
-                                    style={{ borderColor: stamp.color || '#ccc' }}
-                                >
-                                    <div 
-                                        className="flex-grow flex items-center cursor-pointer"
-                                        onClick={() => { 
-                                            if (isSelectedToPlace) { setSelectedStampForPlacement(null); } else { setSelectedStampForPlacement(stamp); }
-                                        }}
-                                    >
-                                        <span className="text-xl mr-2">{stamp.emoji}</span>
-                                        <span className="text-sm">{stamp.title}</span>
-                                    </div>
-                                    <span className="w-3 h-3 rounded-full inline-block mr-2" style={{ backgroundColor: stamp.color }}></span>
-                                    <Button 
-                                        variant="ghost" size="icon" className="h-6 w-6 text-gray-500 hover:text-gray-700 p-0"
-                                        onClick={(e) => { e.stopPropagation(); openStampFormToEdit(stamp); }} title="Edit Stamp"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path d="m2.695 14.762-1.262 3.155a.5.5 0 0 0 .65.65l3.155-1.262a4 4 0 0 0 1.343-.886L17.5 5.502a2.121 2.121 0 0 0-3-3L3.58 13.42a4 4 0 0 0-.886 1.343Z" /></svg>
-                                    </Button>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
-
-            {/* Event Form Modal */}
-            <Modal
-                isOpen={isEventModalOpen} onClose={closeEventFormModal}
-                title={eventModalMode === 'edit' ? 'Edit Event' : 'Create New Event'} size="lg"
-            >
-                {isEventModalOpen && (
-                    <DynamicEventForm
-                        event={selectedEventForForm} onSave={handleSaveEvent} onCancel={closeEventFormModal}
-                        onDelete={eventModalMode === 'edit' && selectedEventForForm 
-                    ? () => requestDeleteConfirmation(selectedEventForForm.id, 'event') 
-                    : undefined}
-                        defaultStartDate={defaultModalDates?.start} defaultEndDate={defaultModalDates?.end}
-                    />
-                )}
-            </Modal>
-
-            {/* Stamp Form Modal */}
-            <Modal
-                isOpen={isStampFormModalOpen} onClose={closeStampFormModal}
-                title={selectedStampForEditing ? "Edit Stamp" : "Create New Stamp"} size="lg"
-            >
-                {isStampFormModalOpen && (
-                    <DynamicStampForm
-                        stamp={selectedStampForEditing} onSave={handleSaveStamp} onCancel={closeStampFormModal}
-                        onDelete={selectedStampForEditing 
-                    ? () => requestDeleteConfirmation(selectedStampForEditing.id, 'stamp') 
-                    : undefined}                    />
-                )}
-            </Modal>
-
-            {/* Day Details Modal */}
-            <DayDetailsModal
-                isOpen={isDayDetailsModalOpen} onClose={closeDayDetailsModal}
-                selectedDate={dateForDetailsModal} eventsOnDay={eventsForSelectedDay}
-                onAddEvent={handleAddEventFromDetails} onEditEvent={handleEditEventFromDetails}
-            />
-                <ConfirmationModal
-      isOpen={isConfirmDeleteModalOpen}
-      onClose={closeConfirmDeleteModal}
-      onConfirm={confirmDeleteItem}
-      title={`Confirm Deletion`}
-      message={itemToDelete?.type === 'stamp' 
-        ? "Are you sure you want to delete this stamp definition? This may also affect its placed instances if not handled separately." 
-        : "Are you sure you want to delete this event?"
+  const confirmStampDelete = useCallback(
+    async (mode: 'soft' | 'cascade') => {
+      if (!pendingDelete || pendingDelete.type !== 'stamp') return;
+      try {
+        await store.deleteStamp(pendingDelete.id, mode);
+        showSuccessToast(
+          mode === 'soft'
+            ? 'Stamp retired. Placed instances kept.'
+            : 'Stamp and all instances deleted.',
+        );
+        setStampDialog({ open: false, stamp: null });
+        if (selectedStampForPlacement?.id === pendingDelete.id) {
+          setSelectedStampForPlacement(null);
+        }
+        setPendingDelete(null);
+      } catch (err) {
+        console.error('Stamp delete failed:', err);
+        showErrorToast('Failed to delete stamp.');
       }
-      confirmText="Delete"
-      isLoading={isDeleting}
-    />
-        </div>
-    );
+    },
+    [pendingDelete, store, selectedStampForPlacement],
+  );
+
+  const pendingStamp = useMemo(() => {
+    if (!pendingDelete || pendingDelete.type !== 'stamp') return null;
+    return store.events.find((e) => e.id === pendingDelete.id) ?? null;
+  }, [pendingDelete, store.events]);
+
+  const pendingStampInstanceCount = useMemo(() => {
+    if (!pendingDelete || pendingDelete.type !== 'stamp') return 0;
+    return store.events.filter((e) => e.originalStampId === pendingDelete.id).length;
+  }, [pendingDelete, store.events]);
+
+  return (
+    <div className="p-2 md:p-6 flex flex-col md:flex-row gap-4">
+      <div className="flex-grow">
+        <CalendarPageHeader
+          user={user}
+          isGuest={isGuest}
+          isSimpleMode={isSimpleMode}
+          onToggleMode={() => setIsSimpleMode((s) => !s)}
+          onAddEvent={() => openCreateEvent()}
+        />
+        <DynamicCalendarView
+          events={displayedEvents}
+          currentView={view}
+          currentDate={date}
+          onView={handleViewChange}
+          onNavigate={handleNavigate}
+          onSelectEvent={handleSelectEvent}
+          onSelectSlot={handleSelectSlot}
+          isSimpleMode={isSimpleMode}
+          onDropFromOutside={handleDropFromOutside}
+          contextStamps={contextMenuStamps}
+          onApplyStampToDay={(stamp, day) => {
+            void handleApplyStamp(stamp, day);
+          }}
+          travelBuffers={travelBuffers}
+        />
+      </div>
+
+      <StampPaletteSheet
+        stamps={masterStamps}
+        selectedStamp={selectedStampForPlacement}
+        onSelect={setSelectedStampForPlacement}
+        onEdit={(stamp) => setStampDialog({ open: true, stamp })}
+        onNewStamp={() => setStampDialog({ open: true, stamp: null })}
+        usage={stampUsage}
+        onTogglePin={(stamp) => {
+          void store
+            .updateEvent(stamp.id, { stampPinned: !stamp.stampPinned })
+            .catch((err) => {
+              console.error('Error pinning stamp:', err);
+              showErrorToast('Could not update pin.');
+            });
+        }}
+        onAddPreset={(preset) => {
+          void store
+            .addEvent(presetToStamp(preset))
+            .then(() => showSuccessToast(`Added ${preset.emoji} ${preset.title}`))
+            .catch((err) => {
+              console.error('Error adding preset stamp:', err);
+              showErrorToast('Could not add preset.');
+            });
+        }}
+        onSharePack={isSignedIn ? () => setShareDialogOpen(true) : undefined}
+        onDragStartStamp={(stamp) => {
+          draggedStampRef.current = stamp;
+        }}
+        onDragEndStamp={() => {
+          draggedStampRef.current = null;
+        }}
+      />
+
+      <EventDialog
+        isOpen={eventDialog.open}
+        mode={eventDialog.mode}
+        event={eventDialog.event}
+        defaultStart={eventDialog.defaultStart}
+        defaultEnd={eventDialog.defaultEnd}
+        onClose={closeEventDialog}
+        onSave={handleSaveEvent}
+        onRequestDelete={
+          eventDialog.event ? () => setPendingDelete({ id: eventDialog.event!.id, type: 'event' }) : undefined
+        }
+        onConvertToStamp={(draft) => {
+          closeEventDialog();
+          setStampDialog({
+            open: true,
+            stamp: {
+              title: draft.title,
+              start: draft.start,
+              end: draft.end,
+              color: draft.color,
+              isStamp: true,
+            } as CalendarEvent,
+          });
+        }}
+      />
+
+      <StampDialog
+        isOpen={stampDialog.open}
+        stamp={stampDialog.stamp}
+        onClose={() => setStampDialog({ open: false, stamp: null })}
+        onSave={handleSaveStamp}
+        onRequestDelete={
+          stampDialog.stamp
+            ? () => setPendingDelete({ id: stampDialog.stamp!.id, type: 'stamp' })
+            : undefined
+        }
+        existingCategories={existingCategories}
+      />
+
+      <DayDetailsModal
+        isOpen={dayDetails.open}
+        onClose={() => setDayDetails({ open: false, date: null })}
+        selectedDate={dayDetails.date}
+        eventsOnDay={eventsForSelectedDay}
+        onAddEvent={(d) => {
+          setDayDetails({ open: false, date: null });
+          const start = new Date(d);
+          start.setHours(9, 0, 0, 0);
+          const end = new Date(d);
+          end.setHours(10, 0, 0, 0);
+          openCreateEvent({ start, end });
+        }}
+        onEditEvent={(event) => {
+          setDayDetails({ open: false, date: null });
+          openEditEvent(event);
+        }}
+      />
+
+      <StampPlacementChip
+        stamp={selectedStampForPlacement}
+        onCancel={() => setSelectedStampForPlacement(null)}
+      />
+
+      <ConfirmationModal
+        isOpen={!!pendingDelete && pendingDelete.type === 'event'}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmEventDelete}
+        title="Confirm Deletion"
+        message="Delete this event?"
+        confirmText="Delete"
+        isLoading={isDeleting}
+      />
+
+      <StampDeleteDialog
+        isOpen={!!pendingDelete && pendingDelete.type === 'stamp'}
+        stamp={pendingStamp}
+        instanceCount={pendingStampInstanceCount}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmStampDelete}
+      />
+
+      {user && !isGuest && (
+        <StampPackShareDialog
+          isOpen={shareDialogOpen}
+          stamps={masterStamps}
+          ownerUid={user.uid}
+          onClose={() => setShareDialogOpen(false)}
+        />
+      )}
+    </div>
+  );
 }

@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { createUserWithEmailAndPassword } from '@/lib/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase/config';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +13,6 @@ export default function SignUpPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -35,9 +33,10 @@ export default function SignUpPage() {
       // AuthProvider's onAuthStateChanged will handle redirect
       // Or, you can explicitly redirect here:
       // router.push('/calendar'); // Or a "verify email" page
-    } catch (err: any) {
-      setError(err.message || "Failed to sign up. Please try again.");
-      console.error("Sign up error:", err);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to sign up. Please try again.';
+      setError(message);
+      console.error('Sign up error:', err);
     } finally {
       setIsLoading(false);
     }

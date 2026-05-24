@@ -6,7 +6,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { BellIcon, CalendarDaysIcon, UserGroupIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowRightOnRectangleIcon,
+  BellIcon,
+  CalendarDaysIcon,
+  Cog6ToothIcon,
+  UserGroupIcon,
+} from '@heroicons/react/24/outline';
 
 interface AppHeaderProps {
   onOpenNotifications: () => void;
@@ -20,6 +26,9 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onOpenNotifications, unreadNotifi
   const navItems = [
     { href: '/calendar', label: 'Calendar', icon: CalendarDaysIcon },
     { href: '/hangouts', label: 'Hangouts', icon: UserGroupIcon },
+    ...(user && !isGuest
+      ? [{ href: '/settings', label: 'Settings', icon: Cog6ToothIcon }]
+      : []),
   ];
 
   return (

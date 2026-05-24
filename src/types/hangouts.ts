@@ -20,6 +20,13 @@ export interface ParticipantEventClient {
   title: string;
   start: Date;
   end: Date;
+  /**
+   * True when this event comes from a stamp marked stampAvailability='tentative'.
+   * Slot-finding still treats the participant as blocked here, but the flag is
+   * available so future scoring can soft-rank slots that overlap tentative time.
+   * TODO: actually use this in findCommonAvailability to downweight slots.
+   */
+  tentative?: boolean;
 }
 
 // For participant's submitted data (client-side)
@@ -54,6 +61,7 @@ export interface ParticipantEventFirestore {
   title: string;
   start: Timestamp;
   end: Timestamp;
+  tentative?: boolean;
 }
 
 export interface ParticipantDataFirestore {

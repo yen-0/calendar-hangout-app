@@ -1,13 +1,13 @@
 // src/components/calendar/EventForm.tsx
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { CalendarEvent } from '@/types/events';
+import React, { useState, useEffect } from 'react';
+import { CalendarEvent, EventLocation, TravelMode } from '@/types/events';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-// import { Textarea } from '@/components/ui/textarea'; // Assuming you have this
 import { Label } from '@/components/ui/label';
-import EmojiPicker, { EmojiClickData, Theme as EmojiTheme } from 'emoji-picker-react';
+import { LocationAutocomplete } from '@/components/location/LocationAutocomplete';
+import { useUserPreferences } from '@/hooks/useUserPreferences';
 // You might need a Popover or Dropdown component for the emoji picker
 // For simplicity, we'll show it inline or via a simple toggle first.
 
@@ -20,12 +20,6 @@ const formatDateForInput = (date: Date | undefined | null): string => {
   return localDate.toISOString().slice(0, 16);
 };
 
-// Helper to format Date to 'yyyy-MM-dd' for date input
-const formatDateForDateInput = (date: Date | undefined | null): string => {
-    if (!date) return '';
-    return new Date(date).toISOString().split('T')[0];
-};
-
 //const daysOfWeekMap: { key: CalendarEvent['repeatDays'] extends (infer U)[] ? U : never, label: string }[] = [
 //    { key: 'SUN', label: 'Sun' },
 //    { key: 'MON', label: 'Mon' },
@@ -36,11 +30,28 @@ const formatDateForDateInput = (date: Date | undefined | null): string => {
 //    { key: 'SAT', label: 'Sat' },
 //];
 
+/**
+ * Form output. Optional fields (location, travelMode) can be:
+ *  - omitted ⇒ no change
+ *  - a value ⇒ set to that value
+ *  - `null` ⇒ explicitly cleared (Firestore `deleteField()`)
+ */
+type EventFormSaveData = Omit<
+  CalendarEvent,
+  'id' | 'isStamp' | 'emoji' | 'repeatDays' | 'repeatEndDate' | 'originalStampId' | 'occurrenceDate' | 'location' | 'travelMode'
+> & {
+  id?: string;
+  location?: EventLocation | null;
+  travelMode?: TravelMode | null;
+};
+
 interface EventFormProps {
   event?: Partial<CalendarEvent> | null; // Event data for editing, or null/undefined for new
-  onSave: (eventData: Omit<CalendarEvent, 'id' | 'isStamp' | 'emoji' | 'repeatDays' | 'repeatEndDate' | 'originalStampId' | 'occurrenceDate'> & { id?: string }) => void; // Modified onSave type
+  onSave: (eventData: EventFormSaveData) => void;
   onCancel: () => void;
   onDelete?: (eventId: string) => void;
+  /** Save current draft as a new stamp template instead of an event. */
+  onConvertToStamp?: (draft: { title: string; start: Date; end: Date; color: string }) => void;
   defaultStartDate?: Date;
   defaultEndDate?: Date;
 }
@@ -50,6 +61,7 @@ const EventForm: React.FC<EventFormProps> = ({
   onSave,
   onCancel,
   onDelete,
+  onConvertToStamp,
   defaultStartDate,
   defaultEndDate,
 }) => {
@@ -58,6 +70,9 @@ const EventForm: React.FC<EventFormProps> = ({
   const [end, setEnd] = useState<string>('');
   const [allDay, setAllDay] = useState(false);
   const [color, setColor] = useState('#2563eb'); // Default blue
+  const [location, setLocation] = useState<EventLocation | undefined>(undefined);
+  const [travelMode, setTravelMode] = useState<TravelMode>('transit');
+  const { prefs } = useUserPreferences();
 
   useEffect(() => {
     if (event) {
@@ -66,6 +81,8 @@ const EventForm: React.FC<EventFormProps> = ({
       setEnd(formatDateForInput(event.end));
       setAllDay(event.allDay || false);
       setColor(event.color || '#2563eb');
+      setLocation(event.location);
+      setTravelMode(event.travelMode ?? 'transit');
     } else {
       // New event
       setTitle('');
@@ -75,6 +92,8 @@ const EventForm: React.FC<EventFormProps> = ({
       setEnd(formatDateForInput(initialEndDate));
       setAllDay(false);
       setColor('#2563eb');
+      setLocation(undefined);
+      setTravelMode('transit');
     }
   }, [event, defaultStartDate, defaultEndDate]);
 
@@ -90,12 +109,29 @@ const EventForm: React.FC<EventFormProps> = ({
         return;
     }
 
-    const eventData: Omit<CalendarEvent, 'id' | 'isStamp' | 'emoji' | 'repeatDays' | 'repeatEndDate' | 'originalStampId' | 'occurrenceDate'> & { id?: string } = {
+    // Encode "explicit clear" vs "no change" via null vs undefined: if this is
+    // an edit and the user removed a previously-set location, send null so the
+    // Firestore write deletes the field instead of leaving stale data behind.
+    const hadLocation = !!event?.location;
+    const locationField: EventLocation | null | undefined = location
+      ? location
+      : hadLocation
+        ? null
+        : undefined;
+    const travelModeField: TravelMode | null | undefined = location
+      ? travelMode
+      : hadLocation
+        ? null
+        : undefined;
+
+    const eventData: EventFormSaveData = {
       title: title.trim(),
       start: startDate,
       end: allDay ? new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 23, 59, 59) : endDate,
       allDay,
       color,
+      location: locationField,
+      travelMode: travelModeField,
       // No stamp-specific fields are set here
     };
     if (event?.id) {
@@ -138,11 +174,58 @@ const EventForm: React.FC<EventFormProps> = ({
         <Input id="event-color" type="color" value={color} onChange={(e) => setColor(e.target.value)} className="mt-1 h-10 w-full" />
       </div>
 
+      {prefs.locationFeaturesEnabled && (
+        <div className="space-y-2 pt-2 border-t border-gray-100">
+          <Label htmlFor="event-location">Location (Tokyo area)</Label>
+          <LocationAutocomplete
+            inputId="event-location"
+            value={location}
+            onChange={setLocation}
+          />
+          {location && (
+            <div>
+              <Label htmlFor="event-travel-mode" className="text-xs">How will you get there?</Label>
+              <select
+                id="event-travel-mode"
+                value={travelMode}
+                onChange={(e) => setTravelMode(e.target.value as TravelMode)}
+                className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              >
+                <option value="transit">🚆 Transit</option>
+                <option value="walk">🚶 Walk</option>
+                <option value="drive">🚗 Drive</option>
+              </select>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Repeat Options REMOVED */}
 
-      <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 mt-6">
+      <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-gray-200 mt-6">
         {isEditing && onDelete && (
           <Button type="button" variant="destructive" onClick={() => onDelete(event!.id!)}>Delete</Button>
+        )}
+        {onConvertToStamp && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              if (!title.trim() || !start || !end) {
+                alert('Title and times are required before converting to a stamp.');
+                return;
+              }
+              onConvertToStamp({
+                title: title.trim(),
+                start: new Date(start),
+                end: new Date(end),
+                color,
+              });
+            }}
+            title="Reuse this event as a placeable stamp template"
+          >
+            Save as stamp
+          </Button>
         )}
         <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
         <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">

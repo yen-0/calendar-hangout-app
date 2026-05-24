@@ -1,13 +1,12 @@
-// src/app/(main)/layout.tsx
-// This layout applies to routes like /calendar, /hangouts
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import AppHeader from '@/components/layout/AppHeader'; // Your shared header
+import AppHeader from '@/components/layout/AppHeader';
 import NotificationsModal from '@/components/common/NotificationsModal';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase/config';
-import { collection, query, where, onSnapshot } from '@/lib/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 export default function MainAppLayout({
   children,
@@ -56,7 +55,7 @@ export default function MainAppLayout({
         unreadNotificationsCount={unreadNotificationsCount}
       />
       <main className="flex-grow container mx-auto py-4 px-2 md:px-4">
-        {children}
+        <ErrorBoundary>{children}</ErrorBoundary>
       </main>
       {/* Shared footer could go here */}
 

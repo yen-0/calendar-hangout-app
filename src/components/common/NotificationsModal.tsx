@@ -2,17 +2,26 @@
 // src/components/common/NotificationsModal.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import Modal from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase/config';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, Timestamp, writeBatch } from 'firebase/firestore';
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  doc,
+  updateDoc,
+  Timestamp,
+  writeBatch,
+} from 'firebase/firestore';
 import { UserNotification, UserNotificationClient } from '@/types/notifications';
-import { CalendarEventWithHangoutId } from '@/types/calendar'; // Assuming this type includes hangoutRequestId
-import { addCalendarItem } from '@/lib/firebase/firestoreService'; // For adding event to own calendar
+import { CalendarEventWithHangoutId } from '@/types/calendar';
+import { addCalendarItem } from '@/lib/firebase/firestoreService';
 import { format } from 'date-fns';
-import { BellIcon, CalendarIcon, CheckCircleIcon } from '@heroicons/react/24/outline'; // Or your icons
+import { CalendarIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { showSuccessToast, showErrorToast } from '@/lib/toasts';
 

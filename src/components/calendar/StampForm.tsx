@@ -2,11 +2,13 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CalendarEvent } from '@/types/events'; // Assuming this type is comprehensive
+import { CalendarEvent, CalendarEventUpdate, EventLocation, StampAvailability, TravelMode } from '@/types/events';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import EmojiPicker, { EmojiClickData, Theme as EmojiTheme } from 'emoji-picker-react';
+import { LocationAutocomplete } from '@/components/location/LocationAutocomplete';
+import { useUserPreferences } from '@/hooks/useUserPreferences';
 
 // Helper to format Date to 'yyyy-MM-ddThh:mm' for datetime-local input
 const formatDateForInput = (date: Date | undefined | null): string => {
@@ -32,11 +34,20 @@ const daysOfWeekMap: { key: NonNullable<CalendarEvent['repeatDays']>[number]; la
     { key: 'SAT', label: 'Sat' },
 ];
 
+type StampFormSaveData = CalendarEventUpdate & {
+  id?: string;
+  title: string;
+  start: Date;
+  end: Date;
+};
+
 interface StampFormProps {
   stamp?: Partial<CalendarEvent> | null; // Stamp data for editing, or null for new
-  onSave: (stampData: Omit<CalendarEvent, 'id'> & { id?: string }) => void;
+  onSave: (stampData: StampFormSaveData) => void;
   onCancel: () => void;
   onDelete?: (stampId: string) => void; // Optional: for deleting existing stamps
+  /** Categories already in use elsewhere, surfaced as <datalist> suggestions. */
+  existingCategories?: string[];
 }
 
 const StampForm: React.FC<StampFormProps> = ({
@@ -44,6 +55,7 @@ const StampForm: React.FC<StampFormProps> = ({
   onSave,
   onCancel,
   onDelete,
+  existingCategories = [],
 }) => {
   const [title, setTitle] = useState(''); // This is the "Label"
   const [start, setStart] = useState<string>(''); // Start time of one stamp instance
@@ -53,6 +65,11 @@ const StampForm: React.FC<StampFormProps> = ({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [repeatDays, setRepeatDays] = useState<Set<string>>(new Set());
   const [repeatEndDate, setRepeatEndDate] = useState<string>('');
+  const [availability, setAvailability] = useState<StampAvailability>('busy');
+  const [category, setCategory] = useState('');
+  const [location, setLocation] = useState<EventLocation | undefined>(undefined);
+  const [travelMode, setTravelMode] = useState<TravelMode>('transit');
+  const { prefs } = useUserPreferences();
   const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -69,6 +86,10 @@ const StampForm: React.FC<StampFormProps> = ({
       setEmoji(stamp.emoji);
       setRepeatDays(new Set(stamp.repeatDays || []));
       setRepeatEndDate(formatDateForDateInput(stamp.repeatEndDate));
+      setAvailability(stamp.stampAvailability ?? 'busy');
+      setCategory(stamp.stampCategory ?? '');
+      setLocation(stamp.location);
+      setTravelMode(stamp.travelMode ?? 'transit');
     } else {
       // New stamp
       setTitle('');
@@ -78,6 +99,10 @@ const StampForm: React.FC<StampFormProps> = ({
       setEmoji(undefined);
       setRepeatDays(new Set());
       setRepeatEndDate('');
+      setAvailability('busy');
+      setCategory('');
+      setLocation(undefined);
+      setTravelMode('transit');
     }
   }, [stamp]);
 
@@ -118,7 +143,19 @@ const StampForm: React.FC<StampFormProps> = ({
         }
     }
 
-    const stampData: Omit<CalendarEvent, 'id'> & { id?: string } = {
+    const hadLocation = !!stamp?.location;
+    const locationField: EventLocation | null | undefined = location
+      ? location
+      : hadLocation
+        ? null
+        : undefined;
+    const travelModeField: TravelMode | null | undefined = location
+      ? travelMode
+      : hadLocation
+        ? null
+        : undefined;
+
+    const stampData: StampFormSaveData = {
       title: title.trim(),
       start: startDate, // Start time for an instance of the stamp
       end: endDate,     // End time for an instance of the stamp
@@ -128,6 +165,10 @@ const StampForm: React.FC<StampFormProps> = ({
       repeatDays: repeatDays.size > 0 ? Array.from(repeatDays) as CalendarEvent['repeatDays'] : undefined,
       repeatEndDate: parsedRepeatEndDate ? parsedRepeatEndDate : undefined,
       allDay: false, // Stamps are typically not all-day in the same way events are; they have a duration
+      stampAvailability: availability,
+      stampCategory: category.trim() ? category.trim() : undefined,
+      location: locationField,
+      travelMode: travelModeField,
     };
 
     if (stamp?.id) {
@@ -145,6 +186,25 @@ const StampForm: React.FC<StampFormProps> = ({
       <div>
         <Label htmlFor="stamp-label">Stamp Label</Label>
         <Input id="stamp-label" type="text" value={title} onChange={(e) => setTitle(e.target.value)} required />
+      </div>
+
+      <div>
+        <Label htmlFor="stamp-category">Category (optional)</Label>
+        <Input
+          id="stamp-category"
+          type="text"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          list="stamp-category-suggestions"
+          placeholder="e.g. Health, Work, Habits"
+        />
+        {existingCategories.length > 0 && (
+          <datalist id="stamp-category-suggestions">
+            {existingCategories.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+        )}
       </div>
 
       <div className="relative">
@@ -173,6 +233,65 @@ const StampForm: React.FC<StampFormProps> = ({
       <div>
         <Label htmlFor="stamp-color">Color</Label>
         <Input id="stamp-color" type="color" value={color} onChange={(e) => setColor(e.target.value)} className="mt-1 h-10 w-full" />
+      </div>
+
+      {prefs.locationFeaturesEnabled && (
+        <div className="space-y-2 pt-4 border-t">
+          <Label htmlFor="stamp-location">Default location (Tokyo area)</Label>
+          <p className="text-[10px] text-gray-500 -mt-1">
+            Stamps placed on the calendar will inherit this location and travel mode.
+          </p>
+          <LocationAutocomplete
+            inputId="stamp-location"
+            value={location}
+            onChange={setLocation}
+          />
+          {location && (
+            <div>
+              <Label htmlFor="stamp-travel-mode" className="text-xs">How will you get there?</Label>
+              <select
+                id="stamp-travel-mode"
+                value={travelMode}
+                onChange={(e) => setTravelMode(e.target.value as TravelMode)}
+                className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              >
+                <option value="transit">🚆 Transit</option>
+                <option value="walk">🚶 Walk</option>
+                <option value="drive">🚗 Drive</option>
+              </select>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="space-y-2 pt-4 border-t">
+        <Label className="block">When this stamp is placed, I&rsquo;m…</Label>
+        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Stamp availability">
+          {(
+            [
+              { key: 'busy', label: 'Busy', hint: 'Blocks hangout slots' },
+              { key: 'free', label: 'Free', hint: 'Ignored when finding slots' },
+              { key: 'tentative', label: 'Tentative', hint: 'Blocks for now; soft-warn later' },
+            ] as { key: StampAvailability; label: string; hint: string }[]
+          ).map((opt) => {
+            const selected = availability === opt.key;
+            return (
+              <Button
+                key={opt.key}
+                type="button"
+                variant={selected ? 'default' : 'outline'}
+                onClick={() => setAvailability(opt.key)}
+                aria-pressed={selected}
+                className="flex flex-col items-start h-auto py-2 px-3 text-left whitespace-normal"
+              >
+                <span className="text-sm font-medium">{opt.label}</span>
+                <span className={`text-[10px] ${selected ? 'text-white/85' : 'text-gray-500'}`}>
+                  {opt.hint}
+                </span>
+              </Button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="space-y-4 pt-4 border-t">

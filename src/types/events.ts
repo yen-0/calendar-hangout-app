@@ -1,27 +1,73 @@
-// src/types/events.ts
 import { DayKey } from '@/types/calendar';
+
+export type CalendarEventSource = 'local' | 'gcal';
+
+export type StampAvailability = 'busy' | 'free' | 'tentative';
+
+export type TravelMode = 'transit' | 'walk' | 'drive';
+
+/**
+ * A geocoded location attached to an event or stamp. Coordinates are required
+ * (the buffer-calculation API needs them); placeId is optional and provider-
+ * specific (Yahoo Japan's `Uid`/`Gid`) — kept opaque so we can swap providers
+ * later without a migration.
+ */
+export interface EventLocation {
+  name: string;
+  address?: string;
+  lat: number;
+  lng: number;
+  placeId?: string;
+}
+
 export interface CalendarEvent {
   id: string;
-  title: string;        // For Stamps, this is the Label
+  title: string;
   start: Date;
   end: Date;
   allDay?: boolean;
-  color?: string;        // Color for the event/stamp
-  
-  isStamp?: boolean;     // True if this event is a Stamp
-  emoji?: string;        // Emoji icon for the Stamp
+  color?: string;
 
-  // Repeat rules for Stamps
-  repeatDays?: DayKey[]; // Days of the week
-  repeatFrequency?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'; // Could add more later (e.g., DAILY)
-  repeatInterval?: number; // e.g., repeat every 2 weeks if frequency is WEEKLY
-  repeatEndDate?: Date;  // The date until which the stamp should repeat
+  // Where the event comes from. Absence is treated as 'local' for backward compatibility.
+  source?: CalendarEventSource;
+  // For GCal-sourced events: the Google event ID (stable across syncs).
+  gcalEventId?: string;
 
-  // For recurring events, we might store the original stamp's ID
-  // and the specific occurrence date if we expand them into individual events.
-  originalStampId?: string; 
-  occurrenceDate?: Date; // The specific date this instance of a recurring stamp falls on
-  
-  // Any other resource data react-big-calendar might use
-  resource?: any; 
+  isStamp?: boolean;
+  emoji?: string;
+
+  repeatDays?: DayKey[];
+  repeatFrequency?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+  repeatInterval?: number;
+  repeatEndDate?: Date;
+
+  originalStampId?: string;
+  occurrenceDate?: Date;
+
+  // Stamp-definition-only fields (ignored on non-stamp events and stamp instances).
+  stampCategory?: string;
+  stampPinned?: boolean;
+  stampOrder?: number;
+  // Default 'busy' when undefined — matches pre-existing behavior.
+  stampAvailability?: StampAvailability;
+  // Soft-delete marker for stamp definitions. When set, the stamp is hidden from
+  // the palette but placed instances are preserved.
+  stampDeletedAt?: Date;
+
+  // Optional geocoded location and preferred travel mode for buffer
+  // calculations. Scoped to Japan for now (the autocomplete is region-locked).
+  location?: EventLocation;
+  travelMode?: TravelMode;
+
+  resource?: unknown;
 }
+
+export const isGcalEvent = (e: CalendarEvent): boolean => e.source === 'gcal';
+
+/**
+ * Partial-update payload that allows `null` for individual fields to explicitly
+ * clear them in storage (Firestore `deleteField()`). `undefined` means "no change."
+ */
+export type CalendarEventUpdate = {
+  [K in keyof Omit<CalendarEvent, 'id'>]?: CalendarEvent[K] | null;
+};

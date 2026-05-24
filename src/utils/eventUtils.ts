@@ -3,17 +3,14 @@ import { CalendarEvent } from '@/types/events';
 import { DayKey } from '@/types/calendar';
 import {
   addDays,
-  addMonths, // For monthly repeats if we add them
-  addYears,  // For yearly repeats if we add them
-  getDay,    // 0 (Sun) to 6 (Sat)
-  isWithinInterval,
+  getDay,
   isBefore,
   isEqual,
   startOfDay,
   endOfDay,
   format,
-  max, // Helper to find the later of two dates
-  min  // Helper to find the earlier of two dates
+  max,
+  min,
 } from 'date-fns';
 
 // Helper to map 'SUN', 'MON' to 0, 1 etc. (date-fns getDay format)

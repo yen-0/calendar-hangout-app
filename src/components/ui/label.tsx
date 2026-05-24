@@ -4,7 +4,7 @@ import React from 'react';
 
 // You can use a more specific type if you use a library like Radix UI Primitives
 // For now, React.LabelHTMLAttributes is fine for a basic component.
-interface LabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> {}
+type LabelProps = React.LabelHTMLAttributes<HTMLLabelElement>;
 
 const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
   ({ className, ...props }, ref) => {

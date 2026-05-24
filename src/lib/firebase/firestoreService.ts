@@ -1,6 +1,4 @@
-// src/lib/firebase/firestoreService.ts
-import { db, auth } from './config'; // Your Firebase config
-
+import { db } from './config';
 import { CalendarEvent } from '@/types/events';
 import {
   setDoc,
@@ -14,28 +12,28 @@ import {
   getDocs,
   updateDoc,
   deleteDoc,
+  deleteField,
   query,
   where,
-  Timestamp,
   writeBatch,
-  arrayUnion,
+  Timestamp,
 } from 'firebase/firestore';
 import {
-  HangoutRequest, // This is your Firestore-facing type (expects Timestamps)
-  HangoutRequestClientState, // This is what your client components should receive (expects JS Dates)
+  HangoutRequest,
+  HangoutRequestClientState,
   HangoutRequestFormData,
-  ParticipantDataClient,     // Client-facing participant data
-  ParticipantEventClient,    // Client-facing participant event
-  FinalSelectedSlotClient,   // Client-facing final slot
-  CommonSlotClient,          // Client-facing common slot
-  DateRangeClient,           // Client-facing date range
-  TimeRange,                 // TimeRange is likely strings "HH:mm", fine as is
-  ParticipantDataFirestore,  // Firestore-facing for iteration
-  ParticipantEventFirestore, // Firestore-facing for iteration
+  ParticipantDataClient,
+  ParticipantEventClient,
+  FinalSelectedSlotClient,
+  CommonSlotClient,
+  DateRangeClient,
+  ParticipantDataFirestore,
+  ParticipantEventFirestore,
   DateRangeFirestore,
   CommonSlotFirestore,
-  FinalSelectedSlotFirestore
 } from '@/types/hangouts';
+import { PackedStamp, StampPackClient, StampPackFirestore } from '@/types/stampPacks';
+import { nanoid } from 'nanoid';
 
 
 // Helper to convert Firestore Timestamps in an event object to JS Dates
@@ -52,31 +50,49 @@ const eventFromFirestore = (docSnap: DocumentSnapshot<DocumentData>): CalendarEv
     emoji: data.emoji,
     repeatDays: data.repeatDays,
     originalStampId: data.originalStampId,
+    stampCategory: data.stampCategory,
+    stampPinned: data.stampPinned,
+    stampOrder: data.stampOrder,
+    stampAvailability: data.stampAvailability,
+    location: data.location,
+    travelMode: data.travelMode,
     // Convert Timestamps back to JS Dates
     start: data.start instanceof Timestamp ? data.start.toDate() : new Date(data.start),
     end: data.end instanceof Timestamp ? data.end.toDate() : new Date(data.end),
     repeatEndDate: data.repeatEndDate ? (data.repeatEndDate instanceof Timestamp ? data.repeatEndDate.toDate() : new Date(data.repeatEndDate)) : undefined,
     occurrenceDate: data.occurrenceDate ? (data.occurrenceDate instanceof Timestamp ? data.occurrenceDate.toDate() : new Date(data.occurrenceDate)) : undefined,
+    stampDeletedAt: data.stampDeletedAt ? (data.stampDeletedAt instanceof Timestamp ? data.stampDeletedAt.toDate() : new Date(data.stampDeletedAt)) : undefined,
     // Ensure all other fields from CalendarEvent are mapped
   };
   return event;
 };
 
-// Helper to convert JS Dates in an event object to Firestore Timestamps
-const eventToFirestore = (eventData: Partial<Omit<CalendarEvent, 'id'>>) => {
-  const dataToSave: any = { ...eventData }; // Start with a copy
-  // Ensure all fields exist before trying to convert
-  if (eventData.start) dataToSave.start = Timestamp.fromDate(new Date(eventData.start));
-  if (eventData.end) dataToSave.end = Timestamp.fromDate(new Date(eventData.end));
-  if (eventData.repeatEndDate) dataToSave.repeatEndDate = Timestamp.fromDate(new Date(eventData.repeatEndDate));
-  if (eventData.occurrenceDate) dataToSave.occurrenceDate = Timestamp.fromDate(new Date(eventData.occurrenceDate));
+// Caller-side input. `null` for an optional field is interpreted as
+// "remove this field from the Firestore doc" (becomes deleteField()).
+// `undefined` means "leave it alone" (no write).
+type EventInput = {
+  [K in keyof Omit<CalendarEvent, 'id'>]?: CalendarEvent[K] | null;
+};
 
-  // Remove undefined fields before saving to Firestore to avoid errors.
-  Object.keys(dataToSave).forEach(key => {
-    if (dataToSave[key] === undefined) {
-      delete dataToSave[key];
+// Date fields that must be converted to Firestore Timestamps before write.
+const DATE_FIELDS = ['start', 'end', 'repeatEndDate', 'occurrenceDate', 'stampDeletedAt'] as const satisfies readonly (keyof CalendarEvent)[];
+
+const eventToFirestore = (eventData: EventInput): DocumentData => {
+  const dataToSave: DocumentData = {};
+  for (const [key, value] of Object.entries(eventData)) {
+    if (value === undefined) continue;
+    if (value === null) {
+      dataToSave[key] = deleteField();
+      continue;
     }
-  });
+    if ((DATE_FIELDS as readonly string[]).includes(key) && value instanceof Date) {
+      dataToSave[key] = Timestamp.fromDate(value);
+    } else if ((DATE_FIELDS as readonly string[]).includes(key)) {
+      dataToSave[key] = Timestamp.fromDate(new Date(value as string | number | Date));
+    } else {
+      dataToSave[key] = value;
+    }
+  }
   return dataToSave;
 };
 
@@ -109,7 +125,7 @@ export const addCalendarItem = async (userId: string, itemData: Omit<CalendarEve
   }
 };
 
-export const updateCalendarItem = async (userId: string, itemId: string, itemData: Partial<Omit<CalendarEvent, 'id'>>): Promise<void> => {
+export const updateCalendarItem = async (userId: string, itemId: string, itemData: EventInput): Promise<void> => {
   if (!userId) throw new Error("User ID is required to update item.");
   try {
     const dataToSave = eventToFirestore(itemData);
@@ -130,6 +146,39 @@ export const deleteCalendarItem = async (userId: string, itemId: string): Promis
     console.error("Error deleting calendar item: ", error);
     throw error;
   }
+};
+
+// Firestore batched writes cap at 500 ops. Most users won't hit this with a
+// single stamp, but we chunk to stay safe.
+const BATCH_LIMIT = 450;
+
+/**
+ * Delete a stamp definition AND every applied instance pointing at it.
+ * Used by the "Delete all" path in the stamp-delete dialog. Returns the number
+ * of instance documents removed (the definition counts separately).
+ */
+export const deleteStampWithInstances = async (
+  userId: string,
+  stampId: string,
+): Promise<number> => {
+  if (!userId) throw new Error("User ID is required to delete stamp.");
+  const colRef = getCalendarItemsCollectionRef(userId);
+  const instanceQuery = query(colRef, where('originalStampId', '==', stampId));
+  const snap = await getDocs(instanceQuery);
+
+  let instanceCount = 0;
+  const docs = snap.docs;
+  for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
+    const slice = docs.slice(i, i + BATCH_LIMIT);
+    const batch = writeBatch(db);
+    slice.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    instanceCount += slice.length;
+  }
+
+  // Definition itself.
+  await deleteDoc(doc(db, 'users', userId, 'calendarItems', stampId));
+  return instanceCount;
 };
 
 const HANGOUT_REQUESTS_COLLECTION = 'hangoutRequests';
@@ -340,4 +389,87 @@ export const deleteHangoutRequest = async (requestId: string): Promise<void> => 
     console.error(`Error deleting hangout request ${requestId}:`, error);
     throw new Error('Failed to delete hangout request.');
   }
+};
+
+// -------- Stamp packs ---------------------------------------------------
+
+const STAMP_PACKS_COLLECTION = 'stampPacks';
+
+const stampPackFromFirestore = (
+  docSnap: DocumentSnapshot<DocumentData>,
+): StampPackClient => {
+  const data = docSnap.data() as StampPackFirestore | undefined;
+  if (!data) throw new Error(`Stamp pack ${docSnap.id} has no data`);
+  return {
+    id: docSnap.id,
+    ownerUid: data.ownerUid,
+    name: data.name,
+    description: data.description,
+    createdAt: data.createdAt.toDate(),
+    revokedAt: data.revokedAt ? data.revokedAt.toDate() : null,
+    stamps: data.stamps ?? [],
+  };
+};
+
+export interface CreateStampPackInput {
+  ownerUid: string;
+  name: string;
+  description?: string;
+  stamps: PackedStamp[];
+}
+
+/**
+ * Create a new stamp pack. Uses a 10-char nanoid for the doc id (URL-safe,
+ * unguessable) so the share link is the id itself.
+ */
+export const createStampPack = async (input: CreateStampPackInput): Promise<string> => {
+  if (!input.ownerUid) throw new Error('ownerUid required');
+  if (!input.stamps?.length) throw new Error('stamps required');
+  const packId = nanoid(10);
+  const ref = doc(db, STAMP_PACKS_COLLECTION, packId);
+  const data: StampPackFirestore = {
+    ownerUid: input.ownerUid,
+    name: input.name.trim().slice(0, 80),
+    description: input.description?.trim().slice(0, 280),
+    createdAt: Timestamp.fromDate(new Date()),
+    revokedAt: null,
+    stamps: input.stamps,
+  };
+  await setDoc(ref, data);
+  return packId;
+};
+
+export const fetchStampPack = async (packId: string): Promise<StampPackClient | null> => {
+  if (!packId) return null;
+  const snap = await getDoc(doc(db, STAMP_PACKS_COLLECTION, packId));
+  if (!snap.exists()) return null;
+  return stampPackFromFirestore(snap);
+};
+
+export const listMyStampPacks = async (ownerUid: string): Promise<StampPackClient[]> => {
+  if (!ownerUid) return [];
+  const q = query(
+    collection(db, STAMP_PACKS_COLLECTION),
+    where('ownerUid', '==', ownerUid),
+  );
+  const snap = await getDocs(q);
+  return snap.docs
+    .map(stampPackFromFirestore)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+};
+
+export const revokeStampPack = async (packId: string): Promise<void> => {
+  await updateDoc(doc(db, STAMP_PACKS_COLLECTION, packId), {
+    revokedAt: Timestamp.fromDate(new Date()),
+  });
+};
+
+export const unrevokeStampPack = async (packId: string): Promise<void> => {
+  await updateDoc(doc(db, STAMP_PACKS_COLLECTION, packId), {
+    revokedAt: null,
+  });
+};
+
+export const deleteStampPack = async (packId: string): Promise<void> => {
+  await deleteDoc(doc(db, STAMP_PACKS_COLLECTION, packId));
 };

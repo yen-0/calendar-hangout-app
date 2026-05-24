@@ -3,8 +3,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-// import { useRouter } from 'next/navigation'; // Not strictly needed if AuthProvider handles redirect
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from '@/lib/firebase';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '@/lib/firebase/config';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,9 +33,10 @@ export default function SignInPage() {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-    } catch (err: any) {
-      setError(err.message || "Failed to sign in. Check credentials.");
-      console.error("Sign in error:", err);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to sign in. Check credentials.';
+      setError(message);
+      console.error('Sign in error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -49,10 +49,10 @@ export default function SignInPage() {
     try {
       await signInWithPopup(auth, provider);
       // AuthProvider's onAuthStateChanged will handle redirect
-      // router.push('/calendar');
-    } catch (err: any) {
-      setError(err.message || "Failed to sign in with Google.");
-      console.error("Google Sign in error:", err);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to sign in with Google.';
+      setError(message);
+      console.error('Google Sign in error:', err);
     } finally {
       setIsGoogleLoading(false);
     }

@@ -1,0 +1,18 @@
+{
+  "name": "Hangly",
+  "short_name": "Hangly",
+  "description": "Calendar × Chouseisan bridge — group scheduling on top of Google Calendar.",
+  "start_url": "/calendar",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon",
+      "purpose": "any"
+    }
+  ]
+}
