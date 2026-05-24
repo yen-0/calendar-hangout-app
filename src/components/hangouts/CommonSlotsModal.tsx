@@ -42,7 +42,7 @@ export function CommonSlotsModal({
 }: Props) {
   const allowSelection = isCreator && request.status !== 'confirmed';
   const rankMutation = useRankSlots();
-  const [aiError, setAiError] = useState<string | null>(null);
+  const [rankError, setRankError] = useState<string | null>(null);
 
   const rankByIndex = useMemo(() => {
     const map = new Map<number, { rank: number; rationale: string }>();
@@ -52,17 +52,21 @@ export function CommonSlotsModal({
     return map;
   }, [rankMutation.data]);
 
-  const handleAiRank = async () => {
-    setAiError(null);
+  const handleRankSlots = async () => {
+    setRankError(null);
     try {
       await rankMutation.mutateAsync({
         hangoutName: request.requestName,
         durationMinutes: request.desiredDurationMinutes,
         memberCount: request.desiredMemberCount,
-        slots: slots.map((s) => ({ startISO: s.start.toISOString(), endISO: s.end.toISOString() })),
+        slots: slots.map((s) => ({
+          startISO: s.start.toISOString(),
+          endISO: s.end.toISOString(),
+          availableParticipants: s.availableParticipants,
+        })),
       });
     } catch (err) {
-      setAiError(err instanceof Error ? err.message : 'AI ranking failed');
+      setRankError(err instanceof Error ? err.message : 'Slot ranking failed');
     }
   };
 
@@ -79,24 +83,24 @@ export function CommonSlotsModal({
             <SparklesIcon className="h-4 w-4" />
             <span>
               {rankMutation.data
-                ? 'AI picked the top slots — gold badges below.'
-                : 'Get AI suggestions for which slot to pick.'}
+                ? 'Top-ranked slots are highlighted below.'
+                : 'Get ranking suggestions for which slot to pick.'}
             </span>
           </div>
           <Button
             size="sm"
             variant="outline"
-            onClick={handleAiRank}
+            onClick={handleRankSlots}
             isLoading={rankMutation.isPending}
             disabled={rankMutation.isPending}
           >
-            {rankMutation.data ? 'Re-rank' : 'AI rank'}
+            {rankMutation.data ? 'Re-rank' : 'Rank slots'}
           </Button>
         </div>
       )}
-      {aiError && (
+      {rankError && (
         <div className="mb-3 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800">
-          {aiError}
+          {rankError}
         </div>
       )}
 
@@ -126,7 +130,7 @@ export function CommonSlotsModal({
                     className={`absolute -top-2 -left-2 inline-flex items-center justify-center w-6 h-6 rounded-full text-white text-xs font-bold shadow ${
                       RANK_BADGE_COLORS[rankInfo.rank - 1] ?? 'bg-amber-300'
                     }`}
-                    title={`AI rank #${rankInfo.rank}`}
+                    title={`Rank #${rankInfo.rank}`}
                   >
                     #{rankInfo.rank}
                   </span>
@@ -135,7 +139,7 @@ export function CommonSlotsModal({
                   {format(slot.start, 'EEE, MMM d, yyyy')}
                 </p>
                 <p className="text-lg text-green-800">
-                  {format(slot.start, 'hh:mm a')} – {format(slot.end, 'hh:mm a')}
+                  {format(slot.start, 'hh:mm a')} â€“ {format(slot.end, 'hh:mm a')}
                 </p>
                 {rankInfo && (
                   <p className="mt-2 text-xs text-amber-900 italic flex items-start gap-1">

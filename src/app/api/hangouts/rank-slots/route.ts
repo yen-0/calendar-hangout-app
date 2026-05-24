@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { format } from 'date-fns';
+import { differenceInMinutes, getDay, isWeekend } from 'date-fns';
 import { z } from 'zod';
 import { HttpError, requireUid } from '@/lib/google/auth-helpers';
-import { getAnthropic } from '@/lib/anthropic';
 
 export const runtime = 'nodejs';
 
 const SlotInputSchema = z.object({
   startISO: z.string(),
   endISO: z.string(),
+  availableParticipants: z.array(z.string()).optional().default([]),
 });
 
 const RequestBodySchema = z.object({
@@ -30,53 +30,178 @@ const RankedResponseSchema = z.object({
     .max(3),
 });
 
-const SYSTEM_PROMPT = `You are a scheduling assistant. You rank candidate meeting slots by likely participant preference and return JSON.
+type SlotInput = z.infer<typeof SlotInputSchema>;
 
-Rules of thumb:
-- Time of day: 10:00-12:00 and 14:00-16:00 are typically preferred. Very early (<08:00) or late (>21:00) are usually avoided.
-- Day of week: Tuesday–Thursday are often easier than Monday or Friday for work meetings; weekends are usually preferred for casual hangouts.
-- Avoid 12:00-13:00 (lunch) unless the hangout is explicitly a meal.
-- Round-numbered start times (e.g. 14:00) feel more "real" than odd ones (e.g. 14:15).
-- Prefer slots whose duration fits comfortably (not too rushed at boundaries).
+type RankedSlot = {
+  index: number;
+  rationale: string;
+  score: number;
+};
 
-Return ONLY a JSON object in this exact shape, no surrounding text or markdown:
-{"ranked": [{"index": <int>, "rationale": "<one sentence>"}, ...]}
-
-Include between 1 and 3 entries, in descending order of preference. "index" must reference the candidate slot's position in the input list (0-based). Each rationale must be a single concise sentence (max 140 chars).`;
-
-function buildUserMessage(body: z.infer<typeof RequestBodySchema>): string {
-  const slotsText = body.slots
-    .map((s, i) => {
-      const start = new Date(s.startISO);
-      const end = new Date(s.endISO);
-      return `[${i}] ${format(start, 'EEE MMM d')} ${format(start, 'HH:mm')}–${format(end, 'HH:mm')}`;
-    })
-    .join('\n');
-  return `Hangout: "${body.hangoutName}"
-Duration: ${body.durationMinutes} min
-Members needed: ${body.memberCount}
-
-Candidate slots:
-${slotsText}`;
+function isWorkLike(name: string): boolean {
+  return /meet|meeting|work|sync|standup|review|planning|project|call|strategy/i.test(name);
 }
 
-function extractJson(text: string): unknown {
-  // Tolerate optional code fences around the JSON.
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  const raw = fenced ? fenced[1] : text;
-  return JSON.parse(raw.trim());
+function isCasual(name: string): boolean {
+  return /hangout|party|dinner|lunch|brunch|coffee|drinks|game|movie|chat|social|hang/i.test(name);
+}
+
+function buildRationale(parts: string[]): string {
+  const sentence = parts
+    .filter(Boolean)
+    .join(' ');
+  return sentence.length > 140 ? sentence.slice(0, 139).trimEnd() : sentence;
+}
+
+function describeAvailability(availableCount: number, memberCount: number): { label: string; score: number } {
+  if (availableCount <= 0) {
+    return { label: 'Availability is thin here.', score: -2 };
+  }
+
+  if (availableCount >= memberCount) {
+    return {
+      label: `${availableCount} people are available, which clears the target.`,
+      score: 5 + (availableCount - memberCount) * 0.5,
+    };
+  }
+
+  const ratio = availableCount / Math.max(1, memberCount);
+  if (ratio >= 0.8) {
+    return {
+      label: `${availableCount} of ${memberCount} people are available here.`,
+      score: 3.5,
+    };
+  }
+
+  if (availableCount >= 2) {
+    return {
+      label: 'A few people are free, but this is a narrower slot.',
+      score: 1.5,
+    };
+  }
+
+  return {
+    label: 'Only a small part of the group is free here.',
+    score: 0.5,
+  };
+}
+
+function describeDay(date: Date, workLike: boolean, casual: boolean): { label: string; score: number } {
+  const day = getDay(date);
+
+  if (workLike) {
+    if (day >= 2 && day <= 4) return { label: 'Midweek timing fits a work-style hangout.', score: 4 };
+    if (day === 1 || day === 5) return { label: 'A weekday slot keeps this practical.', score: 1 };
+    if (isWeekend(date)) return { label: 'Weekend timing is less ideal for a work-style hangout.', score: -2 };
+  }
+
+  if (casual) {
+    if (isWeekend(date)) return { label: 'Weekend timing fits a casual hangout.', score: 4 };
+    if (day === 5) return { label: 'Friday can work well for a casual hangout.', score: 2 };
+    if (day >= 2 && day <= 4) return { label: 'Midweek timing is still reasonable here.', score: 1 };
+  }
+
+  if (day >= 2 && day <= 4) return { label: 'Midweek timing is generally favorable.', score: 3 };
+  if (isWeekend(date)) return { label: 'Weekend timing is a decent fit.', score: 2 };
+  return { label: 'A standard weekday slot keeps it simple.', score: 1 };
+}
+
+function describeTime(start: Date, end: Date, workLike: boolean, casual: boolean): { label: string; score: number } {
+  const startHour = start.getHours() + start.getMinutes() / 60;
+  const endHour = end.getHours() + end.getMinutes() / 60;
+
+  if (startHour < 8 || endHour > 21) {
+    return { label: 'The time is a bit outside the comfortable range.', score: -3 };
+  }
+
+  if (startHour >= 10 && endHour <= 12) {
+    return {
+      label: workLike
+        ? 'Late-morning timing works well for a work-style hangout.'
+        : 'Late-morning timing is a strong fit.',
+      score: 4,
+    };
+  }
+
+  if (startHour >= 14 && endHour <= 16) {
+    return {
+      label: workLike
+        ? 'Afternoon timing is a strong work-friendly window.'
+        : 'Afternoon timing lands in a comfortable window.',
+      score: 4,
+    };
+  }
+
+  if (startHour >= 12 && endHour <= 13) {
+    return {
+      label: casual ? 'Lunch timing fits a meal-style hangout.' : 'Lunch hour is usually a harder slot.',
+      score: casual ? 2 : -3,
+    };
+  }
+
+  if (startHour >= 18 && endHour <= 20) {
+    return {
+      label: casual ? 'Early evening timing works for a casual plan.' : 'Early evening timing is still usable.',
+      score: casual ? 3 : 1,
+    };
+  }
+
+  return { label: 'The timing is acceptable.', score: 1 };
+}
+
+function describeStart(start: Date): { label: string; score: number } {
+  const minute = start.getMinutes();
+  if (minute === 0) return { label: 'A clean top-of-hour start feels easy to read.', score: 1.5 };
+  if (minute === 30) return { label: 'A clean half-hour start keeps the slot tidy.', score: 1.25 };
+  if (minute === 15 || minute === 45) return { label: 'The start time is still fairly tidy.', score: 0.5 };
+  return { label: 'The start time is a little unusual.', score: 0 };
+}
+
+function describeBuffer(durationMinutes: number, requestedMinutes: number): { label: string; score: number } {
+  const extra = durationMinutes - requestedMinutes;
+  if (extra >= 60) return { label: 'There is plenty of extra room in the slot.', score: 2 };
+  if (extra >= 30) return { label: 'There is a comfortable amount of extra room.', score: 1.5 };
+  if (extra >= 0) return { label: 'The slot is long enough for the request.', score: 1 };
+  return { label: 'This slot is shorter than the requested duration.', score: -3 };
+}
+
+function scoreSlot(slot: SlotInput, index: number, body: z.infer<typeof RequestBodySchema>): RankedSlot {
+  const start = new Date(slot.startISO);
+  const end = new Date(slot.endISO);
+  const durationMinutes = Math.max(1, differenceInMinutes(end, start));
+  const workLike = isWorkLike(body.hangoutName);
+  const casual = isCasual(body.hangoutName);
+
+  const availability = describeAvailability(slot.availableParticipants.length, body.memberCount);
+  const day = describeDay(start, workLike, casual);
+  const time = describeTime(start, end, workLike, casual);
+  const startStyle = describeStart(start);
+  const buffer = describeBuffer(durationMinutes, body.durationMinutes);
+
+  const score =
+    availability.score * 10 +
+    day.score * 4 +
+    time.score * 5 +
+    startStyle.score * 2 +
+    buffer.score * 3 -
+    index * 0.001;
+
+  const rationale = buildRationale([
+    availability.label,
+    time.label,
+    day.label,
+  ]);
+
+  return {
+    index,
+    score,
+    rationale,
+  };
 }
 
 export async function POST(req: NextRequest) {
   try {
     await requireUid(req);
-    const client = getAnthropic();
-    if (!client) {
-      return NextResponse.json(
-        { error: 'ai_not_configured', message: 'Set ANTHROPIC_API_KEY to enable AI ranking.' },
-        { status: 503 },
-      );
-    }
 
     const json = await req.json();
     const parsed = RequestBodySchema.safeParse(json);
@@ -84,54 +209,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'invalid_body', issues: parsed.error.issues }, { status: 400 });
     }
 
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 600,
-      system: [
-        {
-          type: 'text',
-          text: SYSTEM_PROMPT,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
-      messages: [{ role: 'user', content: buildUserMessage(parsed.data) }],
-    });
+    const ranked = parsed.data.slots
+      .map((slot, index) => scoreSlot(slot, index, parsed.data))
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .slice(0, Math.min(3, parsed.data.slots.length))
+      .map(({ index, rationale }) => ({ index, rationale }));
 
-    const textBlock = response.content.find((b) => b.type === 'text');
-    if (!textBlock || textBlock.type !== 'text') {
-      return NextResponse.json({ error: 'no_text_response' }, { status: 502 });
-    }
-
-    let rankedObj: unknown;
-    try {
-      rankedObj = extractJson(textBlock.text);
-    } catch {
-      return NextResponse.json(
-        { error: 'unparseable_response', raw: textBlock.text },
-        { status: 502 },
-      );
-    }
-
-    const validated = RankedResponseSchema.safeParse(rankedObj);
+    const validated = RankedResponseSchema.safeParse({ ranked });
     if (!validated.success) {
       return NextResponse.json(
-        { error: 'invalid_response_shape', issues: validated.error.issues, raw: rankedObj },
-        { status: 502 },
+        { error: 'ranking_failed', issues: validated.error.issues },
+        { status: 500 },
       );
     }
 
-    // Filter out indices that don't match candidate slots (defensive).
-    const cleaned = validated.data.ranked.filter((r) => r.index >= 0 && r.index < parsed.data.slots.length);
-
-    return NextResponse.json({
-      ranked: cleaned,
-      usage: {
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens,
-        cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
-        cacheCreateTokens: response.usage.cache_creation_input_tokens ?? 0,
-      },
-    });
+    return NextResponse.json({ ranked: validated.data.ranked });
   } catch (err) {
     if (err instanceof HttpError) {
       return NextResponse.json({ error: err.message }, { status: err.status });

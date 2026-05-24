@@ -12,7 +12,7 @@ interface RankSlotsArgs {
   hangoutName: string;
   durationMinutes: number;
   memberCount: number;
-  slots: Array<{ startISO: string; endISO: string }>;
+  slots: Array<{ startISO: string; endISO: string; availableParticipants?: string[] }>;
 }
 
 interface RankSlotsResponse {
@@ -33,10 +33,6 @@ export function useRankSlots() {
         },
         body: JSON.stringify(args),
       });
-      if (res.status === 503) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message ?? 'AI ranking is not configured on this deployment.');
-      }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? `HTTP ${res.status}`);
