@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/hooks/useLanguage';
 import { StampPackClient } from '@/types/stampPacks';
 import { fetchStampPack } from '@/lib/firebase/firestoreService';
 import { useCalendarStore } from '@/hooks/useCalendarStore';
@@ -15,6 +16,7 @@ export default function StampPackImportPage() {
   const params = useParams();
   const packId = (params?.packId as string | undefined) ?? '';
   const { user, isGuest, loading: authLoading } = useAuth();
+  const { t } = useLanguage();
   const store = useCalendarStore();
 
   const [pack, setPack] = useState<StampPackClient | null>(null);
@@ -26,7 +28,7 @@ export default function StampPackImportPage() {
   useEffect(() => {
     let cancelled = false;
     if (!packId) {
-      setError('Missing pack id.');
+      setError(t.stampPackImport.missingPackId);
       setLoading(false);
       return;
     }
@@ -35,16 +37,16 @@ export default function StampPackImportPage() {
       .then((result) => {
         if (cancelled) return;
         if (!result) {
-          setError('Pack not found, or the link has been revoked.');
+          setError(t.stampPackImport.packNotFound);
         } else if (result.revokedAt) {
-          setError('This pack link has been revoked by its owner.');
+          setError(t.stampPackImport.packRevoked);
         } else {
           setPack(result);
         }
       })
       .catch((err) => {
         console.error('Error fetching stamp pack:', err);
-        if (!cancelled) setError('Could not load this pack.');
+        if (!cancelled) setError(t.stampPackImport.couldNotLoad);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -52,12 +54,12 @@ export default function StampPackImportPage() {
     return () => {
       cancelled = true;
     };
-  }, [packId]);
+  }, [packId, t]);
 
   const handleImport = useCallback(async () => {
     if (!pack) return;
     if (!user || isGuest) {
-      showErrorToast('Sign in to import a pack.');
+      showErrorToast(t.stampPackImport.signInToImport);
       return;
     }
     setImporting(true);
@@ -67,31 +69,33 @@ export default function StampPackImportPage() {
       );
       const failed = results.filter((r) => r.status === 'rejected').length;
       if (failed === 0) {
-        showSuccessToast(`Imported ${pack.stamps.length} stamps.`);
+        showSuccessToast(t.stampPackImport.importedAll(pack.stamps.length));
         setImported(true);
       } else {
-        showInfoToast(`Imported ${pack.stamps.length - failed} of ${pack.stamps.length}.`);
+        showInfoToast(
+          t.stampPackImport.importedSome(pack.stamps.length - failed, pack.stamps.length),
+        );
         setImported(true);
       }
     } catch (err) {
       console.error('Error importing pack:', err);
-      showErrorToast('Could not import pack.');
+      showErrorToast(t.stampPackImport.couldNotImport);
     } finally {
       setImporting(false);
     }
-  }, [pack, user, isGuest, store]);
+  }, [pack, user, isGuest, store, t]);
 
   if (authLoading || loading) {
-    return <div className="max-w-2xl mx-auto p-6 text-gray-500">Loading…</div>;
+    return <div className="mx-auto max-w-2xl p-6 text-gray-500">{t.stampPackImport.loading}</div>;
   }
 
   if (error) {
     return (
-      <div className="max-w-2xl mx-auto p-6">
-        <h1 className="text-xl font-semibold mb-2">Stamp pack</h1>
+      <div className="mx-auto max-w-2xl p-6">
+        <h1 className="mb-2 text-xl font-semibold">{t.stampPackImport.title}</h1>
         <p className="text-red-700">{error}</p>
-        <Link href="/calendar" className="text-indigo-600 underline mt-4 inline-block">
-          Back to calendar
+        <Link href="/calendar" className="mt-4 inline-block text-indigo-600 underline">
+          {t.stampPackImport.backToCalendar}
         </Link>
       </div>
     );
@@ -100,30 +104,29 @@ export default function StampPackImportPage() {
   if (!pack) return null;
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-1">{pack.name}</h1>
-      {pack.description && <p className="text-gray-700 mb-4">{pack.description}</p>}
-      <p className="text-xs text-gray-500 mb-6">
-        {pack.stamps.length} stamp{pack.stamps.length === 1 ? '' : 's'} · shared{' '}
+    <div className="mx-auto max-w-2xl p-6">
+      <h1 className="mb-1 text-2xl font-bold">{pack.name}</h1>
+      {pack.description && <p className="mb-4 text-gray-700">{pack.description}</p>}
+      <p className="mb-6 text-xs text-gray-500">
+        {pack.stamps.length} stamp{pack.stamps.length === 1 ? '' : 's'} · {t.stampPackImport.shared}{' '}
         {pack.createdAt.toLocaleDateString()}
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {pack.stamps.map((stamp, idx) => {
           const startH = Math.floor(stamp.startMinutes / 60);
           const startM = stamp.startMinutes % 60;
           return (
             <div
               key={idx}
-              className="flex items-start gap-3 p-3 border rounded"
+              className="flex items-start gap-3 rounded border p-3"
               style={{ borderColor: stamp.color || '#ccc' }}
             >
-              <span className="text-2xl flex-shrink-0">{stamp.emoji}</span>
-              <div className="flex-grow min-w-0">
-                <div className="font-medium truncate">{stamp.title}</div>
+              <span className="flex-shrink-0 text-2xl">{stamp.emoji}</span>
+              <div className="min-w-0 flex-grow">
+                <div className="truncate font-medium">{stamp.title}</div>
                 <div className="text-xs text-gray-500">
-                  {`${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`} ·{' '}
-                  {stamp.durationMinutes} min
+                  {`${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`} · {stamp.durationMinutes} min
                   {stamp.category ? ` · ${stamp.category}` : ''}
                   {stamp.availability && stamp.availability !== 'busy'
                     ? ` · ${stamp.availability}`
@@ -137,16 +140,16 @@ export default function StampPackImportPage() {
 
       {imported ? (
         <div className="space-y-3">
-          <p className="text-green-700 font-medium">All set — these stamps are now in your palette.</p>
+          <p className="font-medium text-green-700">{t.stampPackImport.ready}</p>
           <Link href="/calendar" className="inline-block">
-            <Button>Go to calendar</Button>
+            <Button>{t.stampPackImport.goToCalendar}</Button>
           </Link>
         </div>
       ) : !user || isGuest ? (
         <div className="space-y-3">
-          <p className="text-sm text-gray-600">Sign in to add these to your stamps.</p>
+          <p className="text-sm text-gray-600">{t.stampPackImport.signInToAdd}</p>
           <Link href="/sign-in" className="inline-block">
-            <Button>Sign in to import</Button>
+            <Button>{t.stampPackImport.signInToImportButton}</Button>
           </Link>
         </div>
       ) : (
@@ -154,9 +157,9 @@ export default function StampPackImportPage() {
           onClick={handleImport}
           isLoading={importing}
           disabled={importing}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white"
+          className="bg-indigo-600 text-white hover:bg-indigo-700"
         >
-          Import all {pack.stamps.length} stamp{pack.stamps.length === 1 ? '' : 's'}
+          {t.stampPackImport.importAll(pack.stamps.length)}
         </Button>
       )}
     </div>

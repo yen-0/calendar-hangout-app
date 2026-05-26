@@ -5,6 +5,7 @@ import Modal from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { CalendarEvent } from '@/types/events';
 import { StampDeleteMode } from '@/hooks/useCalendarStore';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface Props {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export function StampDeleteDialog({
   onConfirm,
 }: Props) {
   const [busyMode, setBusyMode] = useState<StampDeleteMode | null>(null);
+  const { t } = useLanguage();
 
   if (!stamp) return null;
 
@@ -46,7 +48,7 @@ export function StampDeleteDialog({
   const isBusy = busyMode !== null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Delete stamp" size="sm">
+    <Modal isOpen={isOpen} onClose={onClose} title={t.calendar.deleteStampTitle} size="sm">
       <div className="text-sm text-gray-700 mb-4">
         Delete the{' '}
         <span className="font-semibold">
@@ -99,9 +101,9 @@ export function StampDeleteDialog({
       </div>
 
       <div className="flex justify-end mt-4">
-        <Button variant="ghost" onClick={onClose} disabled={isBusy}>
-          Cancel
-        </Button>
+          <Button variant="ghost" onClick={onClose} disabled={isBusy}>
+          {t.common.cancel}
+          </Button>
       </div>
     </Modal>
   );

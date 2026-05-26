@@ -8,10 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { LocationAutocomplete } from '@/components/location/LocationAutocomplete';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
-// You might need a Popover or Dropdown component for the emoji picker
-// For simplicity, we'll show it inline or via a simple toggle first.
+import { useLanguage } from '@/hooks/useLanguage';
 
-// Helper to format Date to 'yyyy-MM-ddThh:mm' for datetime-local input
 const formatDateForInput = (date: Date | undefined | null): string => {
   if (!date) return '';
   const d = new Date(date);
@@ -20,22 +18,6 @@ const formatDateForInput = (date: Date | undefined | null): string => {
   return localDate.toISOString().slice(0, 16);
 };
 
-//const daysOfWeekMap: { key: CalendarEvent['repeatDays'] extends (infer U)[] ? U : never, label: string }[] = [
-//    { key: 'SUN', label: 'Sun' },
-//    { key: 'MON', label: 'Mon' },
-//    { key: 'TUE', label: 'Tue' },
-//    { key: 'WED', label: 'Wed' },
-//    { key: 'THU', label: 'Thu' },
-//    { key: 'FRI', label: 'Fri' },
-//    { key: 'SAT', label: 'Sat' },
-//];
-
-/**
- * Form output. Optional fields (location, travelMode) can be:
- *  - omitted ⇒ no change
- *  - a value ⇒ set to that value
- *  - `null` ⇒ explicitly cleared (Firestore `deleteField()`)
- */
 type EventFormSaveData = Omit<
   CalendarEvent,
   'id' | 'isStamp' | 'emoji' | 'repeatDays' | 'repeatEndDate' | 'originalStampId' | 'occurrenceDate' | 'location' | 'travelMode'
@@ -46,11 +28,10 @@ type EventFormSaveData = Omit<
 };
 
 interface EventFormProps {
-  event?: Partial<CalendarEvent> | null; // Event data for editing, or null/undefined for new
+  event?: Partial<CalendarEvent> | null;
   onSave: (eventData: EventFormSaveData) => void;
   onCancel: () => void;
   onDelete?: (eventId: string) => void;
-  /** Save current draft as a new stamp template instead of an event. */
   onConvertToStamp?: (draft: { title: string; start: Date; end: Date; color: string }) => void;
   defaultStartDate?: Date;
   defaultEndDate?: Date;
@@ -69,10 +50,11 @@ const EventForm: React.FC<EventFormProps> = ({
   const [start, setStart] = useState<string>('');
   const [end, setEnd] = useState<string>('');
   const [allDay, setAllDay] = useState(false);
-  const [color, setColor] = useState('#2563eb'); // Default blue
+  const [color, setColor] = useState('#2563eb');
   const [location, setLocation] = useState<EventLocation | undefined>(undefined);
   const [travelMode, setTravelMode] = useState<TravelMode>('transit');
   const { prefs } = useUserPreferences();
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (event) {
@@ -84,7 +66,6 @@ const EventForm: React.FC<EventFormProps> = ({
       setLocation(event.location);
       setTravelMode(event.travelMode ?? 'transit');
     } else {
-      // New event
       setTitle('');
       const initialStartDate = defaultStartDate || new Date();
       setStart(formatDateForInput(initialStartDate));
@@ -99,30 +80,25 @@ const EventForm: React.FC<EventFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) { alert("Title is required."); return; }
-    if (!start || !end) { alert("Start and End times are required."); return; }
+    if (!title.trim()) {
+      alert(t.forms.titleRequired);
+      return;
+    }
+    if (!start || !end) {
+      alert(t.forms.startEndRequired);
+      return;
+    }
     const startDate = new Date(start);
     const endDate = new Date(end);
 
     if (endDate <= startDate && !allDay) {
-        alert("End time must be after start time.");
-        return;
+      alert(t.forms.endAfterStart);
+      return;
     }
 
-    // Encode "explicit clear" vs "no change" via null vs undefined: if this is
-    // an edit and the user removed a previously-set location, send null so the
-    // Firestore write deletes the field instead of leaving stale data behind.
     const hadLocation = !!event?.location;
-    const locationField: EventLocation | null | undefined = location
-      ? location
-      : hadLocation
-        ? null
-        : undefined;
-    const travelModeField: TravelMode | null | undefined = location
-      ? travelMode
-      : hadLocation
-        ? null
-        : undefined;
+    const locationField: EventLocation | null | undefined = location ? location : hadLocation ? null : undefined;
+    const travelModeField: TravelMode | null | undefined = location ? travelMode : hadLocation ? null : undefined;
 
     const eventData: EventFormSaveData = {
       title: title.trim(),
@@ -132,7 +108,6 @@ const EventForm: React.FC<EventFormProps> = ({
       color,
       location: locationField,
       travelMode: travelModeField,
-      // No stamp-specific fields are set here
     };
     if (event?.id) {
       eventData.id = event.id;
@@ -143,17 +118,13 @@ const EventForm: React.FC<EventFormProps> = ({
   const isEditing = !!event?.id;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 p-1"> {/* Removed max-h and overflow, as it's simpler now */}
-      {/* Event Type Toggle REMOVED */}
-
+    <form onSubmit={handleSubmit} className="space-y-6 p-1">
       <div>
         <Label htmlFor="event-title">Event Title</Label>
         <Input id="event-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} required />
       </div>
 
-      {/* Emoji Picker REMOVED */}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
           <Label htmlFor="event-start">Start Time</Label>
           <Input id="event-start" type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} required disabled={allDay} />
@@ -163,10 +134,12 @@ const EventForm: React.FC<EventFormProps> = ({
           <Input id="event-end" type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} required disabled={allDay} />
         </div>
       </div>
-      
+
       <div className="flex items-center">
-        <input id="event-allDay" type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
-        <Label htmlFor="event-allDay" className="ml-2 block text-sm text-gray-900">All-day event</Label>
+        <input id="event-allDay" type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+        <Label htmlFor="event-allDay" className="ml-2 block text-sm text-gray-900">
+          {t.calendar.allDay}
+        </Label>
       </div>
 
       <div>
@@ -175,16 +148,14 @@ const EventForm: React.FC<EventFormProps> = ({
       </div>
 
       {prefs.locationFeaturesEnabled && (
-        <div className="space-y-2 pt-2 border-t border-gray-100">
+        <div className="space-y-2 border-t border-gray-100 pt-2">
           <Label htmlFor="event-location">Location (Tokyo area)</Label>
-          <LocationAutocomplete
-            inputId="event-location"
-            value={location}
-            onChange={setLocation}
-          />
+          <LocationAutocomplete inputId="event-location" value={location} onChange={setLocation} />
           {location && (
             <div>
-              <Label htmlFor="event-travel-mode" className="text-xs">How will you get there?</Label>
+              <Label htmlFor="event-travel-mode" className="text-xs">
+                How will you get there?
+              </Label>
               <select
                 id="event-travel-mode"
                 value={travelMode}
@@ -200,11 +171,11 @@ const EventForm: React.FC<EventFormProps> = ({
         </div>
       )}
 
-      {/* Repeat Options REMOVED */}
-
-      <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-gray-200 mt-6">
+      <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-gray-200 pt-4">
         {isEditing && onDelete && (
-          <Button type="button" variant="destructive" onClick={() => onDelete(event!.id!)}>Delete</Button>
+          <Button type="button" variant="destructive" onClick={() => onDelete(event!.id!)}>
+            Delete
+          </Button>
         )}
         {onConvertToStamp && (
           <Button
@@ -227,8 +198,10 @@ const EventForm: React.FC<EventFormProps> = ({
             Save as stamp
           </Button>
         )}
-        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          {t.common.cancel}
+        </Button>
+        <Button type="submit" className="bg-blue-600 text-white hover:bg-blue-700">
           {isEditing ? 'Save Changes' : 'Create Event'}
         </Button>
       </div>

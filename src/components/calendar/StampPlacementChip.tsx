@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { CalendarEvent } from '@/types/events';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface Props {
   stamp: CalendarEvent | null;
@@ -15,6 +16,7 @@ interface Props {
  * including on mobile where the palette is scrolled off-screen.
  */
 export function StampPlacementChip({ stamp, onCancel }: Props) {
+  const { t, language } = useLanguage();
   // ESC clears placement on desktop. Cheap to wire globally — only listens when armed.
   useEffect(() => {
     if (!stamp) return;
@@ -45,9 +47,9 @@ export function StampPlacementChip({ stamp, onCancel }: Props) {
         <div className="flex flex-col text-sm leading-tight min-w-0">
           <span className="font-medium truncate">{stamp.title}</span>
           <span className="text-xs text-gray-300 hidden sm:inline">
-            Tap a day to place · ESC to cancel
+            {language === 'ja' ? t.stamps.placingHint : t.stamps.placingHint}
           </span>
-          <span className="text-xs text-gray-300 sm:hidden">Tap days to place</span>
+          <span className="text-xs text-gray-300 sm:hidden">{t.stamps.placingHintMobile}</span>
         </div>
         <Button
           variant="ghost"
@@ -55,7 +57,7 @@ export function StampPlacementChip({ stamp, onCancel }: Props) {
           onClick={onCancel}
           className="ml-1 h-8 px-3 text-white hover:bg-white/10"
         >
-          Done
+          {t.stamps.done}
         </Button>
       </div>
     </div>

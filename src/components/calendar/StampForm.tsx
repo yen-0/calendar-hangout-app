@@ -1,16 +1,15 @@
-// src/components/calendar/StampForm.tsx
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { CalendarEvent, CalendarEventUpdate, EventLocation, StampAvailability, TravelMode } from '@/types/events';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import React, { useEffect, useRef, useState } from 'react';
 import EmojiPicker, { EmojiClickData, Theme as EmojiTheme } from 'emoji-picker-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { LocationAutocomplete } from '@/components/location/LocationAutocomplete';
+import { useLanguage } from '@/hooks/useLanguage';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
+import { CalendarEvent, CalendarEventUpdate, EventLocation, StampAvailability, TravelMode } from '@/types/events';
 
-// Helper to format Date to 'yyyy-MM-ddThh:mm' for datetime-local input
 const formatDateForInput = (date: Date | undefined | null): string => {
   if (!date) return '';
   const d = new Date(date);
@@ -19,20 +18,10 @@ const formatDateForInput = (date: Date | undefined | null): string => {
   return localDate.toISOString().slice(0, 16);
 };
 
-// Helper to format Date to 'yyyy-MM-dd' for date input
 const formatDateForDateInput = (date: Date | undefined | null): string => {
-    if (!date) return '';
-    return new Date(date).toISOString().split('T')[0];
+  if (!date) return '';
+  return new Date(date).toISOString().split('T')[0];
 };
-
-
-
-
-const daysOfWeekMap: { key: NonNullable<CalendarEvent['repeatDays']>[number]; label: string }[] = [
-    { key: 'SUN', label: 'Sun' }, { key: 'MON', label: 'Mon' }, { key: 'TUE', label: 'Tue' },
-    { key: 'WED', label: 'Wed' }, { key: 'THU', label: 'Thu' }, { key: 'FRI', label: 'Fri' },
-    { key: 'SAT', label: 'Sat' },
-];
 
 type StampFormSaveData = CalendarEventUpdate & {
   id?: string;
@@ -42,41 +31,37 @@ type StampFormSaveData = CalendarEventUpdate & {
 };
 
 interface StampFormProps {
-  stamp?: Partial<CalendarEvent> | null; // Stamp data for editing, or null for new
+  stamp?: Partial<CalendarEvent> | null;
   onSave: (stampData: StampFormSaveData) => void;
   onCancel: () => void;
-  onDelete?: (stampId: string) => void; // Optional: for deleting existing stamps
-  /** Categories already in use elsewhere, surfaced as <datalist> suggestions. */
+  onDelete?: (stampId: string) => void;
   existingCategories?: string[];
 }
 
-const StampForm: React.FC<StampFormProps> = ({
-  stamp, // Renamed from 'event' for clarity
-  onSave,
-  onCancel,
-  onDelete,
-  existingCategories = [],
-}) => {
-  const [title, setTitle] = useState(''); // This is the "Label"
-  const [start, setStart] = useState<string>(''); // Start time of one stamp instance
-  const [end, setEnd] = useState<string>('');   // End time of one stamp instance
-  const [color, setColor] = useState('#4f46e5'); // Default indigo for stamps
+const daysOfWeek = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const;
+
+const StampForm: React.FC<StampFormProps> = ({ stamp, onSave, onCancel, onDelete, existingCategories = [] }) => {
+  const { t } = useLanguage();
+  const { prefs } = useUserPreferences();
+  const [title, setTitle] = useState('');
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [color, setColor] = useState('#4f46e5');
   const [emoji, setEmoji] = useState<string | undefined>(undefined);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [repeatDays, setRepeatDays] = useState<Set<string>>(new Set());
-  const [repeatEndDate, setRepeatEndDate] = useState<string>('');
+  const [repeatEndDate, setRepeatEndDate] = useState('');
   const [availability, setAvailability] = useState<StampAvailability>('busy');
   const [category, setCategory] = useState('');
   const [location, setLocation] = useState<EventLocation | undefined>(undefined);
   const [travelMode, setTravelMode] = useState<TravelMode>('transit');
-  const { prefs } = useUserPreferences();
   const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const defaultStartTime = new Date();
-    defaultStartTime.setHours(9, 0, 0, 0); // Default 9 AM
+    defaultStartTime.setHours(9, 0, 0, 0);
     const defaultEndTime = new Date();
-    defaultEndTime.setHours(10, 0, 0, 0); // Default 10 AM (1 hour duration)
+    defaultEndTime.setHours(10, 0, 0, 0);
 
     if (stamp) {
       setTitle(stamp.title || '');
@@ -91,7 +76,6 @@ const StampForm: React.FC<StampFormProps> = ({
       setLocation(stamp.location);
       setTravelMode(stamp.travelMode ?? 'transit');
     } else {
-      // New stamp
       setTitle('');
       setStart(formatDateForInput(defaultStartTime));
       setEnd(formatDateForInput(defaultEndTime));
@@ -106,41 +90,50 @@ const StampForm: React.FC<StampFormProps> = ({
     }
   }, [stamp]);
 
-  useEffect(() => { /* ... handleClickOutside for emoji picker ... */ 
+  useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
         setShowEmojiPicker(false);
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [emojiPickerRef]);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setEmoji(emojiData.emoji);
+    setShowEmojiPicker(false);
+  };
 
-  const handleEmojiClick = (emojiData: EmojiClickData) => { /* ... same ... */ setEmoji(emojiData.emoji); setShowEmojiPicker(false); };
-  const toggleRepeatDay = (dayKey: string) => { /* ... same ... */ setRepeatDays(prev => { const newSet = new Set(prev); if (newSet.has(dayKey)) newSet.delete(dayKey); else newSet.add(dayKey); return newSet; }); };
+  const toggleRepeatDay = (dayKey: string) => {
+    setRepeatDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(dayKey)) next.delete(dayKey);
+      else next.add(dayKey);
+      return next;
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) { alert("Stamp Label is required."); return; }
-    if (!emoji) { alert("Please select an Emoji for the stamp."); return; }
-    if (!start || !end) { alert("Start and End times are required for the stamp instance."); return; }
-    
+    if (!title.trim()) return alert(t.stampForm.requiredLabel);
+    if (!emoji) return alert(t.stampForm.requiredEmoji);
+    if (!start || !end) return alert(t.stampForm.requiredTimes);
+
     const startDate = new Date(start);
     const endDate = new Date(end);
-    if (endDate <= startDate) { alert("Stamp instance End time must be after Start time."); return; }
+    if (endDate <= startDate) return alert(t.stampForm.endAfterStart);
 
-    if (repeatDays.size > 0 && !repeatEndDate) { alert("Please select a Repeat Until date for the recurring stamp."); return; }
-    
-    let parsedRepeatEndDate;
+    if (repeatDays.size > 0 && !repeatEndDate) return alert(t.stampForm.requiredRepeatUntil);
+
+    let parsedRepeatEndDate: Date | undefined;
     if (repeatDays.size > 0 && repeatEndDate) {
-        parsedRepeatEndDate = new Date(repeatEndDate);
-        const stampInstanceStartDate = new Date(start.split('T')[0]); // Date part of the first occurrence
-         // Ensure repeat end date is not before the stamp's first possible occurrence (using date part of start time)
-        if (parsedRepeatEndDate < stampInstanceStartDate) {
-            alert("Repeat Until date cannot be before the stamp's effective start date.");
-            return;
-        }
+      parsedRepeatEndDate = new Date(repeatEndDate);
+      const stampInstanceStartDate = new Date(start.split('T')[0]);
+      if (parsedRepeatEndDate < stampInstanceStartDate) {
+        alert(t.stampForm.repeatUntilBeforeStart);
+        return;
+      }
     }
 
     const hadLocation = !!stamp?.location;
@@ -157,46 +150,43 @@ const StampForm: React.FC<StampFormProps> = ({
 
     const stampData: StampFormSaveData = {
       title: title.trim(),
-      start: startDate, // Start time for an instance of the stamp
-      end: endDate,     // End time for an instance of the stamp
+      start: startDate,
+      end: endDate,
       color,
-      isStamp: true, // This form ALWAYS creates/edits stamps
+      isStamp: true,
       emoji,
-      repeatDays: repeatDays.size > 0 ? Array.from(repeatDays) as CalendarEvent['repeatDays'] : undefined,
-      repeatEndDate: parsedRepeatEndDate ? parsedRepeatEndDate : undefined,
-      allDay: false, // Stamps are typically not all-day in the same way events are; they have a duration
+      repeatDays: repeatDays.size > 0 ? (Array.from(repeatDays) as CalendarEvent['repeatDays']) : undefined,
+      repeatEndDate: parsedRepeatEndDate,
+      allDay: false,
       stampAvailability: availability,
       stampCategory: category.trim() ? category.trim() : undefined,
       location: locationField,
       travelMode: travelModeField,
     };
 
-    if (stamp?.id) {
-      stampData.id = stamp.id;
-    }
+    if (stamp?.id) stampData.id = stamp.id;
     onSave(stampData);
   };
 
   const isEditing = !!stamp?.id;
+  const dayLabels = t.stampForm.weekdayLabels;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-h-[80vh] overflow-y-auto p-1">
-      {/* Event Type Toggle REMOVED - This form is only for Stamps */}
-      
       <div>
-        <Label htmlFor="stamp-label">Stamp Label</Label>
+        <Label htmlFor="stamp-label">{t.stampForm.label}</Label>
         <Input id="stamp-label" type="text" value={title} onChange={(e) => setTitle(e.target.value)} required />
       </div>
 
       <div>
-        <Label htmlFor="stamp-category">Category (optional)</Label>
+        <Label htmlFor="stamp-category">{t.stampForm.category}</Label>
         <Input
           id="stamp-category"
           type="text"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           list="stamp-category-suggestions"
-          placeholder="e.g. Health, Work, Habits"
+          placeholder={t.stampForm.categoryPlaceholder}
         />
         {existingCategories.length > 0 && (
           <datalist id="stamp-category-suggestions">
@@ -208,70 +198,71 @@ const StampForm: React.FC<StampFormProps> = ({
       </div>
 
       <div className="relative">
-        <Label htmlFor="stamp-emoji">Emoji Icon</Label>
-        <Button type="button" variant="outline" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="w-full flex justify-start items-center text-left mt-1">
-          {emoji ? <span className="text-2xl mr-2">{emoji}</span> : 'Select Emoji'}
+        <Label htmlFor="stamp-emoji">{t.stampForm.emoji}</Label>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          className="mt-1 flex w-full items-center justify-start text-left"
+        >
+          {emoji ? <span className="mr-2 text-2xl">{emoji}</span> : t.stampForm.selectEmoji}
         </Button>
         {showEmojiPicker && (
-          <div ref={emojiPickerRef} className="absolute z-10 mt-1"><EmojiPicker onEmojiClick={handleEmojiClick} autoFocusSearch={false} theme={EmojiTheme.AUTO} lazyLoadEmojis /></div>
+          <div ref={emojiPickerRef} className="absolute z-10 mt-1">
+            <EmojiPicker onEmojiClick={handleEmojiClick} autoFocusSearch={false} theme={EmojiTheme.AUTO} lazyLoadEmojis />
+          </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <Label htmlFor="stamp-start">Instance Start Time</Label>
+          <Label htmlFor="stamp-start">{t.stampForm.start}</Label>
           <Input id="stamp-start" type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} required />
         </div>
         <div>
-          <Label htmlFor="stamp-end">Instance End Time</Label>
+          <Label htmlFor="stamp-end">{t.stampForm.end}</Label>
           <Input id="stamp-end" type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} required />
         </div>
       </div>
-      
-      {/* All-day checkbox REMOVED for stamps; duration is explicit */}
 
       <div>
-        <Label htmlFor="stamp-color">Color</Label>
+        <Label htmlFor="stamp-color">{t.stampForm.color}</Label>
         <Input id="stamp-color" type="color" value={color} onChange={(e) => setColor(e.target.value)} className="mt-1 h-10 w-full" />
       </div>
 
       {prefs.locationFeaturesEnabled && (
-        <div className="space-y-2 pt-4 border-t">
-          <Label htmlFor="stamp-location">Default location (Tokyo area)</Label>
-          <p className="text-[10px] text-gray-500 -mt-1">
-            Stamps placed on the calendar will inherit this location and travel mode.
-          </p>
-          <LocationAutocomplete
-            inputId="stamp-location"
-            value={location}
-            onChange={setLocation}
-          />
+        <div className="space-y-2 border-t pt-4">
+          <Label htmlFor="stamp-location">{t.stampForm.defaultLocation}</Label>
+          <p className="text-[10px] text-gray-500 -mt-1">{t.stampForm.locationHelp}</p>
+          <LocationAutocomplete inputId="stamp-location" value={location} onChange={setLocation} />
           {location && (
             <div>
-              <Label htmlFor="stamp-travel-mode" className="text-xs">How will you get there?</Label>
+              <Label htmlFor="stamp-travel-mode" className="text-xs">
+                {t.stampForm.travelMode}
+              </Label>
               <select
                 id="stamp-travel-mode"
                 value={travelMode}
                 onChange={(e) => setTravelMode(e.target.value as TravelMode)}
                 className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
               >
-                <option value="transit">🚆 Transit</option>
-                <option value="walk">🚶 Walk</option>
-                <option value="drive">🚗 Drive</option>
+                <option value="transit">{t.stampForm.transit}</option>
+                <option value="walk">{t.stampForm.walk}</option>
+                <option value="drive">{t.stampForm.drive}</option>
               </select>
             </div>
           )}
         </div>
       )}
 
-      <div className="space-y-2 pt-4 border-t">
-        <Label className="block">When this stamp is placed, I&rsquo;m…</Label>
-        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Stamp availability">
+      <div className="space-y-2 border-t pt-4">
+        <Label className="block">{t.stampForm.availability}</Label>
+        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label={t.stampForm.availability}>
           {(
             [
-              { key: 'busy', label: 'Busy', hint: 'Blocks hangout slots' },
-              { key: 'free', label: 'Free', hint: 'Ignored when finding slots' },
-              { key: 'tentative', label: 'Tentative', hint: 'Blocks for now; soft-warn later' },
+              { key: 'busy', label: t.stampForm.busy, hint: t.stampForm.busyHint },
+              { key: 'free', label: t.stampForm.free, hint: t.stampForm.freeHint },
+              { key: 'tentative', label: t.stampForm.tentative, hint: t.stampForm.tentativeHint },
             ] as { key: StampAvailability; label: string; hint: string }[]
           ).map((opt) => {
             const selected = availability === opt.key;
@@ -282,43 +273,60 @@ const StampForm: React.FC<StampFormProps> = ({
                 variant={selected ? 'default' : 'outline'}
                 onClick={() => setAvailability(opt.key)}
                 aria-pressed={selected}
-                className="flex flex-col items-start h-auto py-2 px-3 text-left whitespace-normal"
+                className="flex h-auto flex-col items-start px-3 py-2 text-left whitespace-normal"
               >
                 <span className="text-sm font-medium">{opt.label}</span>
-                <span className={`text-[10px] ${selected ? 'text-white/85' : 'text-gray-500'}`}>
-                  {opt.hint}
-                </span>
+                <span className={`text-[10px] ${selected ? 'text-white/85' : 'text-gray-500'}`}>{opt.hint}</span>
               </Button>
             );
           })}
         </div>
       </div>
 
-      <div className="space-y-4 pt-4 border-t">
-        <Label className="block text-lg font-semibold">Repeat Options</Label>
+      <div className="space-y-4 border-t pt-4">
+        <Label className="block text-lg font-semibold">{t.stampForm.repeatOptions}</Label>
         <div>
-          <Label>Repeat on Days:</Label>
-          <div className="mt-2 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
-            {daysOfWeekMap.map((day) => (
-              <Button type="button" key={day.key} variant={repeatDays.has(day.key) ? 'default' : 'outline'} onClick={() => toggleRepeatDay(day.key)} className="text-xs sm:text-sm">{day.label}</Button>
+          <Label>{t.stampForm.repeatDays}</Label>
+          <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-7">
+            {daysOfWeek.map((day) => (
+              <Button
+                type="button"
+                key={day}
+                variant={repeatDays.has(day) ? 'default' : 'outline'}
+                onClick={() => toggleRepeatDay(day)}
+                className="text-xs sm:text-sm"
+              >
+                {dayLabels[day]}
+              </Button>
             ))}
           </div>
         </div>
         {repeatDays.size > 0 && (
           <div>
-            <Label htmlFor="stamp-repeat-end">Repeat Until:</Label>
-            <Input id="stamp-repeat-end" type="date" value={repeatEndDate} onChange={(e) => setRepeatEndDate(e.target.value)} className="mt-1" required={repeatDays.size > 0} />
+            <Label htmlFor="stamp-repeat-end">{t.stampForm.repeatUntil}</Label>
+            <Input
+              id="stamp-repeat-end"
+              type="date"
+              value={repeatEndDate}
+              onChange={(e) => setRepeatEndDate(e.target.value)}
+              className="mt-1"
+              required={repeatDays.size > 0}
+            />
           </div>
         )}
       </div>
 
-      <div className="flex justify-end space-x-3 pt-6 border-t">
+      <div className="flex justify-end space-x-3 border-t pt-6">
         {isEditing && onDelete && (
-          <Button type="button" variant="destructive" onClick={() => onDelete(stamp!.id!)}>Delete Stamp</Button>
+          <Button type="button" variant="destructive" onClick={() => onDelete(stamp!.id!)}>
+            {t.stampForm.deleteStamp}
+          </Button>
         )}
-        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white">
-          {isEditing ? 'Save Stamp' : 'Create Stamp'}
+        <Button type="button" variant="outline" onClick={onCancel}>
+          {t.common.cancel}
+        </Button>
+        <Button type="submit" className="bg-indigo-600 text-white hover:bg-indigo-700">
+          {isEditing ? t.stampForm.saveStamp : t.stampForm.createStamp}
         </Button>
       </div>
     </form>

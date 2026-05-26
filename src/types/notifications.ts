@@ -3,12 +3,15 @@ import { Timestamp } from 'firebase/firestore';
 
 export interface UserNotification {
   id: string; // Document ID
-  type: 'hangout_invitation' | 'generic_message' | 'friend_request'; // Add other types as needed
+  type: 'hangout_invitation' | 'hangout_request' | 'generic_message' | 'friend_request'; // Add other types as needed
   hangoutRequestId?: string;
   hangoutRequestName?: string;
   confirmedSlotStart?: Timestamp; // Firestore Timestamp
   confirmedSlotEnd?: Timestamp;   // Firestore Timestamp
+  creatorUid?: string;
   creatorName?: string;           // For hangout_invitation
+  friendRequestId?: string;
+  friendUid?: string;
   isRead: boolean;
   createdAt: Timestamp;
   message: string;

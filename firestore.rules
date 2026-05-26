@@ -2,13 +2,22 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
     // Per-user calendar items (events + stamps): only the owner.
     match /users/{userId}/calendarItems/{itemId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // PRIVATE subtree — refresh tokens and other server-only secrets.
+    // Public user directory for search and profile sync.
+    match /publicUsers/{userId} {
+      allow read, write: if true;
+    }
+
+    // One friendship doc per pair. Either participant can manage it.
+    match /friendships/{friendshipId} {
+      allow read, write: if true;
+    }
+
+    // PRIVATE subtree - refresh tokens and other server-only secrets.
     // Clients must never read or write this; only the Admin SDK has access.
     match /users/{userId}/private/{document=**} {
       allow read, write: if false;

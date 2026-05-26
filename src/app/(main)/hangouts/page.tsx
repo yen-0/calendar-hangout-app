@@ -1,7 +1,9 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useCallback, useState } from 'react';
-import dynamic from 'next/dynamic';
+import nextDynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -11,10 +13,7 @@ import { HangoutRequestCard } from '@/components/hangouts/HangoutRequestCard';
 import { ShareLinkPanel } from '@/components/hangouts/ShareLinkPanel';
 import { HangoutsEmptyState } from '@/components/hangouts/HangoutsEmptyState';
 import { showErrorToast, showInfoToast, showSuccessToast } from '@/lib/toasts';
-import {
-  HangoutRequestClientState,
-  HangoutRequestFormData,
-} from '@/types/hangouts';
+import { HangoutRequestClientState, HangoutRequestFormData } from '@/types/hangouts';
 import {
   useCreateHangoutRequest,
   useDeleteHangoutRequest,
@@ -22,14 +21,12 @@ import {
 } from '@/lib/queries/hangoutRequests';
 import { fetchCalendarItems } from '@/lib/firebase/firestoreService';
 import { prepareCreatorEventsForRequest } from '@/utils/hangoutUtils';
+import { useLanguage } from '@/hooks/useLanguage';
 
-const DynamicHangoutRequestForm = dynamic(
-  () => import('@/components/hangouts/HangoutRequestForm'),
-  {
-    ssr: false,
-    loading: () => <p className="p-6 text-center">Loading form…</p>,
-  },
-);
+const DynamicHangoutRequestForm = nextDynamic(() => import('@/components/hangouts/HangoutRequestForm'), {
+  ssr: false,
+  loading: () => <p className="p-6 text-center">Loading form…</p>,
+});
 
 function EditModalContent({
   request,
@@ -64,6 +61,7 @@ export default function HangoutsPage() {
   const requestsQuery = useHangoutRequestsForUser(user?.uid);
   const createMutation = useCreateHangoutRequest();
   const deleteMutation = useDeleteHangoutRequest();
+  const { t } = useLanguage();
 
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<HangoutRequestClientState | null>(null);
@@ -73,17 +71,20 @@ export default function HangoutsPage() {
 
   const requests = requestsQuery.data ?? [];
 
-  const copyShareLink = useCallback((id: string) => {
-    const link = `${window.location.origin}/hangouts/reply/${id}`;
-    if (!navigator.clipboard) {
-      showErrorToast('Clipboard API not available.');
-      return;
-    }
-    navigator.clipboard
-      .writeText(link)
-      .then(() => showInfoToast('Link copied to clipboard!'))
-      .catch(() => showErrorToast('Failed to copy link.'));
-  }, []);
+  const copyShareLink = useCallback(
+    (id: string) => {
+      const link = `${window.location.origin}/hangouts/reply/${id}`;
+      if (!navigator.clipboard) {
+        showErrorToast('Clipboard API not available.');
+        return;
+      }
+      navigator.clipboard
+        .writeText(link)
+        .then(() => showInfoToast(t.hangouts.shareLinkCopied))
+        .catch(() => showErrorToast('Failed to copy link.'));
+    },
+    [t.hangouts.shareLinkCopied],
+  );
 
   const handleCreate = useCallback(
     async (formData: HangoutRequestFormData) => {
@@ -106,7 +107,7 @@ export default function HangoutsPage() {
           creatorEvents,
         });
         setNewlyCreatedId(id);
-        showSuccessToast('Hangout Request created!');
+        showSuccessToast(t.hangouts.createSuccess);
         setCreateOpen(false);
       } catch (err) {
         console.error('Failed to create request:', err);
@@ -115,11 +116,9 @@ export default function HangoutsPage() {
         setIsProcessing(false);
       }
     },
-    [user, isGuest, createMutation],
+    [user, isGuest, createMutation, t.hangouts.createSuccess],
   );
 
-  // useUpdateHangoutRequestDetails is curried by requestId; for one-shot edits across many
-  // requests, we invoke firestoreService directly and refetch the list.
   const handleEditSaveDirect = useCallback(
     async (formData: HangoutRequestFormData) => {
       if (!editing || !user || user.uid !== editing.creatorUid) return;
@@ -130,7 +129,7 @@ export default function HangoutsPage() {
           requestName: formData.requestName,
           desiredMemberCount: formData.desiredMemberCount,
         });
-        showSuccessToast('Request updated!');
+        showSuccessToast(t.hangouts.requestUpdated);
         setEditing(null);
         await requestsQuery.refetch();
       } catch (err) {
@@ -140,7 +139,7 @@ export default function HangoutsPage() {
         setIsProcessing(false);
       }
     },
-    [editing, user, requestsQuery],
+    [editing, user, requestsQuery, t.hangouts.requestUpdated],
   );
 
   const handleCloseOrArchive = useCallback(
@@ -151,7 +150,7 @@ export default function HangoutsPage() {
       try {
         const { updateHangoutRequestDetails } = await import('@/lib/firebase/firestoreService');
         await updateHangoutRequestDetails(req.id, { status: 'closed' });
-        showSuccessToast('Request closed.');
+        showSuccessToast(t.hangouts.requestClosed);
         await requestsQuery.refetch();
       } catch (err) {
         console.error('Failed to close:', err);
@@ -160,7 +159,7 @@ export default function HangoutsPage() {
         setIsProcessing(false);
       }
     },
-    [user, requestsQuery],
+    [user, requestsQuery, t.hangouts.requestClosed],
   );
 
   const handleDeleteConfirm = useCallback(async () => {
@@ -168,7 +167,7 @@ export default function HangoutsPage() {
     setIsProcessing(true);
     try {
       await deleteMutation.mutateAsync(pendingDelete.id);
-      showSuccessToast('Request deleted!');
+      showSuccessToast(t.hangouts.requestDeleted);
       setPendingDelete(null);
       await requestsQuery.refetch();
     } catch (err) {
@@ -177,17 +176,17 @@ export default function HangoutsPage() {
     } finally {
       setIsProcessing(false);
     }
-  }, [pendingDelete, user, deleteMutation, requestsQuery]);
+  }, [pendingDelete, user, deleteMutation, requestsQuery, t.hangouts.requestDeleted]);
 
-  if (authLoading) return <div className="p-6 text-center">Loading authentication…</div>;
+  if (authLoading) return <div className="p-6 text-center">{t.hangouts.loadingAuth}</div>;
 
   if (isGuest) {
     return (
       <div className="p-6 text-center">
-        <p className="mb-4 text-lg">Want to create and manage hangout requests?</p>
-        <p className="mb-4 text-gray-600">Please sign in or create an account to use this feature.</p>
+        <p className="mb-4 text-lg">{t.hangouts.guestPromptTitle}</p>
+        <p className="mb-4 text-gray-600">{t.hangouts.guestPromptBody}</p>
         <Link href="/sign-in">
-          <Button size="lg">Sign In / Sign Up</Button>
+          <Button size="lg">{t.nav.signInSignUp}</Button>
         </Link>
       </div>
     );
@@ -196,9 +195,9 @@ export default function HangoutsPage() {
   if (!user) {
     return (
       <div className="p-6 text-center">
-        <p className="mb-4">Please sign in to manage hangout requests.</p>
+        <p className="mb-4">{t.hangouts.signedOutPrompt}</p>
         <Link href="/sign-in">
-          <Button>Sign In</Button>
+          <Button>{t.nav.signIn}</Button>
         </Link>
       </div>
     );
@@ -206,23 +205,23 @@ export default function HangoutsPage() {
 
   return (
     <div className="p-4 md:p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-semibold">My Hangout Requests</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">{t.hangouts.myRequests}</h1>
         <Button
           onClick={() => {
             setNewlyCreatedId(null);
             setCreateOpen(true);
           }}
-          className="bg-green-600 hover:bg-green-700 text-white"
+          className="bg-green-600 text-white hover:bg-green-700"
         >
-          + Create New Request
+          {t.hangouts.createNewRequest}
         </Button>
       </div>
 
       {newlyCreatedId && <ShareLinkPanel requestId={newlyCreatedId} />}
 
       {requestsQuery.isLoading ? (
-        <p className="text-center text-gray-500 py-4">Loading your requests…</p>
+        <p className="py-4 text-center text-gray-500">{t.hangouts.loadingRequests}</p>
       ) : requests.length === 0 ? (
         <HangoutsEmptyState onCreate={() => setCreateOpen(true)} />
       ) : (
@@ -245,7 +244,7 @@ export default function HangoutsPage() {
       <Modal
         isOpen={isCreateOpen}
         onClose={() => setCreateOpen(false)}
-        title="Create New Hangout Request"
+        title={t.hangouts.createDialog}
         size="lg"
       >
         {isCreateOpen && (
@@ -260,7 +259,7 @@ export default function HangoutsPage() {
       <Modal
         isOpen={!!editing}
         onClose={() => setEditing(null)}
-        title="Edit Hangout Request"
+        title={t.hangouts.editDialog}
         size="lg"
       >
         {editing && (
@@ -277,10 +276,10 @@ export default function HangoutsPage() {
         isOpen={!!pendingDelete}
         onClose={() => setPendingDelete(null)}
         onConfirm={handleDeleteConfirm}
-        title="Confirm Delete Request"
+        title={t.hangouts.delete}
         message={`Delete the request "${pendingDelete?.requestName ?? ''}"? This cannot be undone.`}
         isLoading={isProcessing}
-        confirmText="Delete"
+        confirmText={t.hangouts.delete}
       />
     </div>
   );

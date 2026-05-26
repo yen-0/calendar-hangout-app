@@ -4,6 +4,7 @@
 import React from 'react';
 import Modal from './modal'; // Your existing generic Modal
 import { Button } from './button'; // Your existing Button
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   cancelText = "Cancel",
   isLoading = false,
 }) => {
+  const { t } = useLanguage();
   if (!isOpen) return null;
 
   return (
@@ -33,7 +35,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
       <div className="text-sm text-gray-600 mb-6">{message}</div>
       <div className="flex justify-end space-x-3">
         <Button variant="outline" onClick={onClose} disabled={isLoading}>
-          {cancelText}
+          {cancelText ?? t.common.cancel}
         </Button>
         <Button
           variant="destructive" // Or 'default' if it's not always destructive
@@ -41,7 +43,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           isLoading={isLoading}
           disabled={isLoading}
         >
-          {confirmText}
+          {confirmText ?? t.common.confirm}
         </Button>
       </div>
     </Modal>

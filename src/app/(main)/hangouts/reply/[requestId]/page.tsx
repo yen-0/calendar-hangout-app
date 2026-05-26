@@ -11,6 +11,7 @@ import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import { HangoutDetailsCard } from '@/components/hangouts/HangoutDetailsCard';
 import { ConfirmedSlotBanner } from '@/components/hangouts/ConfirmedSlotBanner';
 import { CommonSlotsModal } from '@/components/hangouts/CommonSlotsModal';
+import { useLanguage } from '@/hooks/useLanguage';
 import {
   CommonSlotClient,
   HangoutRequestClientState,
@@ -30,27 +31,25 @@ import { writeHangoutToCalendars } from '@/lib/google/write-hangout-client';
 
 export default function ReplyToHangoutRequestPage() {
   const { user, loading: authLoading } = useAuth();
+  const { t } = useLanguage();
   const params = useParams();
   const requestId = params?.requestId as string | undefined;
 
   const [request, setRequest] = useState<HangoutRequestClientState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
-
   const [isSubmittingAvailability, setIsSubmittingAvailability] = useState(false);
   const [hasUserAlreadySubmitted, setHasUserAlreadySubmitted] = useState(false);
-
   const [isCalculatingSlots, setIsCalculatingSlots] = useState(false);
   const [commonSlots, setCommonSlots] = useState<CommonSlotClient[]>([]);
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
   const [selectedFinalSlotIndex, setSelectedFinalSlotIndex] = useState<number | null>(null);
-
   const [isConfirmingSlot, setIsConfirmingSlot] = useState(false);
   const [slotToConfirm, setSlotToConfirm] = useState<CommonSlotClient | null>(null);
 
   const loadRequest = useCallback(async () => {
     if (!requestId) {
-      setPageError('Request ID is missing.');
+      setPageError(t.replyPage.requestIdMissing);
       setIsLoading(false);
       return;
     }
@@ -60,7 +59,7 @@ export default function ReplyToHangoutRequestPage() {
     try {
       const fetched = await fetchHangoutRequestById(requestId);
       if (!fetched) {
-        setPageError("Hangout request not found or you don't have access.");
+        setPageError(t.replyPage.requestNotFound);
         return;
       }
       setRequest(fetched);
@@ -74,12 +73,12 @@ export default function ReplyToHangoutRequestPage() {
       }
     } catch (err) {
       console.error('Failed to load hangout request:', err);
-      setPageError('Could not load the hangout request details.');
-      showErrorToast('Failed to load request details.');
+      setPageError(t.replyPage.couldNotLoadDetails);
+      showErrorToast(t.replyPage.failedToLoadDetails);
     } finally {
       setIsLoading(false);
     }
-  }, [requestId, authLoading, user]);
+  }, [requestId, authLoading, user, t]);
 
   useEffect(() => {
     loadRequest();
@@ -87,7 +86,7 @@ export default function ReplyToHangoutRequestPage() {
 
   const handleSubmitAvailability = useCallback(async () => {
     if (!user || !request) {
-      showErrorToast('User not logged in or request not loaded.');
+      showErrorToast(t.replyPage.notLoggedInOrNotLoaded);
       return;
     }
     setIsSubmittingAvailability(true);
@@ -106,7 +105,7 @@ export default function ReplyToHangoutRequestPage() {
         events: participantEvents,
       };
       await addParticipantToHangoutRequest(request.id, user.uid, newParticipant);
-      showSuccessToast('Your availability has been submitted!');
+      showSuccessToast(t.replyPage.availabilitySubmitted);
       setHasUserAlreadySubmitted(true);
       setRequest((prev) => {
         if (!prev) return null;
@@ -120,27 +119,25 @@ export default function ReplyToHangoutRequestPage() {
       });
     } catch (err) {
       console.error('Error submitting availability:', err);
-      setPageError(`Failed to submit availability. ${(err as Error).message}`);
-      showErrorToast('Failed to submit availability.');
+      setPageError(`${t.replyPage.failedToSubmitAvailability} ${(err as Error).message}`);
+      showErrorToast(t.replyPage.failedToSubmitAvailability);
     } finally {
       setIsSubmittingAvailability(false);
     }
-  }, [user, request]);
+  }, [user, request, t]);
 
   const handleCalculateCommonTimes = useCallback(async () => {
     if (!request) {
-      showErrorToast('Request data not loaded.');
+      showErrorToast(t.replyPage.requestDataNotLoaded);
       return;
     }
     const submittedCount = Object.keys(request.participants || {}).length;
     if (submittedCount === 0) {
-      showInfoToast('No participants have submitted their availability yet.');
+      showInfoToast(t.replyPage.noParticipantsYet);
       return;
     }
     if (submittedCount < request.desiredMemberCount) {
-      showInfoToast(
-        `Waiting for at least ${request.desiredMemberCount} participants. Currently ${submittedCount} have responded.`,
-      );
+      showInfoToast(t.replyPage.waitingForParticipants(request.desiredMemberCount, submittedCount));
     }
     setIsCalculatingSlots(true);
     setCommonSlots([]);
@@ -158,38 +155,40 @@ export default function ReplyToHangoutRequestPage() {
         })),
         status: newStatus,
       });
-      showSuccessToast(slots.length > 0 ? `Found ${slots.length} common slots!` : 'No common slots found.');
+      showSuccessToast(
+        slots.length > 0 ? t.replyPage.foundCommonSlots(slots.length) : t.replyPage.noCommonSlots,
+      );
       setRequest((prev) =>
         prev ? { ...prev, status: newStatus, commonAvailabilitySlots: slots } : null,
       );
       if (slots.length > 0) setIsResultsModalOpen(true);
     } catch (err) {
       console.error('Error calculating common times:', err);
-      showErrorToast('An error occurred while calculating common times.');
+      showErrorToast(t.replyPage.calculateFailed);
     } finally {
       setIsCalculatingSlots(false);
     }
-  }, [request]);
+  }, [request, t]);
 
   const handleInitiateConfirm = useCallback(() => {
     if (!request || selectedFinalSlotIndex === null || !commonSlots[selectedFinalSlotIndex]) {
-      showErrorToast('Please select a valid slot to confirm.');
+      showErrorToast(t.replyPage.invalidSlot);
       return;
     }
     if (!user || user.uid !== request.creatorUid) {
-      showErrorToast('Only the creator can confirm the final slot.');
+      showErrorToast(t.replyPage.onlyCreator);
       return;
     }
     setSlotToConfirm(commonSlots[selectedFinalSlotIndex]);
-  }, [request, selectedFinalSlotIndex, commonSlots, user]);
+  }, [request, selectedFinalSlotIndex, commonSlots, user, t]);
 
   const handleConfirmAndInvite = useCallback(async () => {
     if (!request || !slotToConfirm || !user) {
-      showErrorToast('Missing critical data to confirm slot.');
+      showErrorToast(t.replyPage.missingConfirmData);
       return;
     }
     if (user.uid !== request.creatorUid) {
-      showErrorToast('Only the creator can confirm the final slot.');
+      showErrorToast(t.replyPage.onlyCreator);
       return;
     }
     setSlotToConfirm(null);
@@ -220,10 +219,10 @@ export default function ReplyToHangoutRequestPage() {
               color: '#4CAF50',
             };
             await addCalendarItem(user.uid, creatorEvent);
-            showInfoToast('Confirmed event added to your calendar.');
+            showInfoToast(t.replyPage.eventAddedToCalendar);
           } catch (err) {
             console.error("Failed to add confirmed event to creator's calendar:", err);
-            showErrorToast('Could not add event to your own calendar automatically.');
+            showErrorToast(t.replyPage.couldNotAddToOwnCalendar);
           }
           continue;
         }
@@ -243,7 +242,7 @@ export default function ReplyToHangoutRequestPage() {
         });
       }
       await batch.commit();
-      showSuccessToast(`Slot confirmed: ${format(slotStart, 'MMM d, hh:mm a')}! Invitations sent.`);
+      showSuccessToast(t.replyPage.slotConfirmed(format(slotStart, 'MMM d, hh:mm a')));
       setRequest((prev) =>
         prev
           ? { ...prev, status: 'confirmed', finalSelectedSlot: { start: slotStart, end: slotEnd } }
@@ -252,8 +251,6 @@ export default function ReplyToHangoutRequestPage() {
       setIsResultsModalOpen(false);
       setSelectedFinalSlotIndex(null);
 
-      // Best-effort: push the event to each participant's Google Calendar.
-      // Skips participants who haven't connected GCal; errors are isolated per participant.
       try {
         const results = await writeHangoutToCalendars({
           hangoutRequestId: request.id,
@@ -266,41 +263,37 @@ export default function ReplyToHangoutRequestPage() {
         const skipped = results.filter((r) => r.status === 'skipped_not_connected').length;
         const errored = results.filter((r) => r.status === 'error').length;
         if (written > 0) {
-          showInfoToast(
-            `Wrote event to ${written} Google Calendar${written === 1 ? '' : 's'}` +
-              (skipped > 0 ? ` (${skipped} not connected)` : '') +
-              (errored > 0 ? ` (${errored} failed)` : ''),
-          );
+          showInfoToast(t.replyPage.wroteEventToCalendars(written, skipped, errored));
         } else if (skipped > 0 && errored === 0) {
-          showInfoToast('No participants have connected Google Calendar yet.');
+          showInfoToast(t.replyPage.noParticipantsConnected);
         } else if (errored > 0) {
-          showErrorToast(`Google Calendar write failed for ${errored} participant(s).`);
+          showErrorToast(t.replyPage.writeFailed(errored));
         }
       } catch (err) {
         console.error('GCal write-back failed:', err);
-        showErrorToast('Could not push event to Google Calendars.');
+        showErrorToast(t.replyPage.couldNotPushCalendars);
       }
     } catch (err) {
       console.error('Error confirming final slot:', err);
-      showErrorToast('Failed to confirm the slot. Please try again.');
+      showErrorToast(t.replyPage.confirmFailed);
     } finally {
       setIsConfirmingSlot(false);
     }
-  }, [request, slotToConfirm, user]);
+  }, [request, slotToConfirm, user, t]);
 
   if (authLoading || isLoading) {
-    return <div className="p-6 text-center text-gray-500">Loading request details…</div>;
+    return <div className="p-6 text-center text-gray-500">{t.replyPage.loading}</div>;
   }
   if (pageError) {
     return (
       <div className="p-6 text-center text-red-600">
-        <p className="font-semibold text-lg">Error</p>
+        <p className="text-lg font-semibold">{t.replyPage.error}</p>
         <p>{pageError}</p>
       </div>
     );
   }
   if (!request) {
-    return <div className="p-6 text-center text-gray-500">Hangout request not found.</div>;
+    return <div className="p-6 text-center text-gray-500">{t.replyPage.notFound}</div>;
   }
 
   const canSubmit =
@@ -312,7 +305,7 @@ export default function ReplyToHangoutRequestPage() {
   const showSlotsActions = request.status !== 'confirmed' && request.status !== 'closed';
 
   return (
-    <div className="max-w-3xl mx-auto p-4 md:p-8 my-6 bg-white shadow-xl rounded-2xl">
+    <div className="mx-auto my-6 max-w-3xl rounded-2xl bg-white p-4 shadow-xl md:p-8">
       <HangoutDetailsCard request={request} />
 
       {request.status === 'confirmed' && request.finalSelectedSlot && (
@@ -320,57 +313,57 @@ export default function ReplyToHangoutRequestPage() {
       )}
 
       {user && request.status !== 'confirmed' && request.status !== 'closed' && (
-        <section className="mb-8 p-6 bg-slate-50 rounded-lg">
-          <h2 className="text-xl font-semibold text-slate-700 mb-4">Your Participation</h2>
+        <section className="mb-8 rounded-lg bg-slate-50 p-6">
+          <h2 className="mb-4 text-xl font-semibold text-slate-700">{t.replyPage.yourParticipation}</h2>
           {canSubmit && (
             <Button
               variant="solid"
-              className="bg-blue-600 hover:bg-blue-700 text-white w-full mb-2"
+              className="mb-2 w-full bg-blue-600 text-white hover:bg-blue-700"
               onClick={handleSubmitAvailability}
               isLoading={isSubmittingAvailability}
               disabled={isSubmittingAvailability}
             >
-              Submit My Availability
+              {t.replyPage.submitAvailability}
             </Button>
           )}
           {canResubmit && (
             <Button
               variant="outline"
-              className="w-full mb-2"
+              className="mb-2 w-full"
               onClick={handleSubmitAvailability}
               isLoading={isSubmittingAvailability}
               disabled={isSubmittingAvailability}
             >
-              Update My Availability
+              {t.replyPage.updateAvailability}
             </Button>
           )}
         </section>
       )}
 
       {!user && (
-        <div className="mb-8 p-6 bg-yellow-50 rounded-lg text-center text-yellow-700">
-          <p className="text-lg font-semibold mb-2">Sign in to participate</p>
-          <p>Please sign in to submit your availability or join this hangout.</p>
+        <div className="mb-8 rounded-lg bg-yellow-50 p-6 text-center text-yellow-700">
+          <p className="mb-2 text-lg font-semibold">{t.replyPage.signInToParticipate}</p>
+          <p>{t.replyPage.signInToParticipateBody}</p>
         </div>
       )}
 
       {showSlotsActions && (
         <section className="mb-8">
-          <h2 className="text-2xl font-semibold text-slate-700 mb-4">Find Common Slots</h2>
+          <h2 className="mb-4 text-2xl font-semibold text-slate-700">{t.replyPage.findCommonSlots}</h2>
           {(request.status === 'results_ready' || request.status === 'no_slots_found') &&
             commonSlots.length > 0 && (
               <Button
                 onClick={() => setIsResultsModalOpen(true)}
                 variant="solid"
-                className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg mb-4"
+                className="mb-4 w-full bg-green-600 py-3 text-lg text-white hover:bg-green-700"
               >
-                View Calculated Common Slots
+                {t.replyPage.viewCalculatedSlots}
               </Button>
             )}
           {(request.status === 'results_ready' || request.status === 'no_slots_found') &&
             commonSlots.length === 0 && (
-              <p className="text-center text-slate-500 py-4 px-6 bg-slate-50 rounded-md">
-                No common time slots were found based on the latest calculation.
+              <p className="rounded-md bg-slate-50 px-6 py-4 text-center text-slate-500">
+                {t.replyPage.noSlotsBasedOnLatest}
               </p>
             )}
           {user &&
@@ -387,16 +380,17 @@ export default function ReplyToHangoutRequestPage() {
                 disabled={isCalculatingSlots}
               >
                 {isCalculatingSlots
-                  ? 'Calculating…'
+                  ? t.replyPage.calculating
                   : request.status === 'results_ready' || request.status === 'no_slots_found'
-                    ? 'Re-Calculate Common Times'
-                    : 'Calculate Common Times Now'}
+                    ? t.replyPage.recalculateCommonTimes
+                    : t.replyPage.calculateNow}
               </Button>
             )}
           {request.status === 'pending' && participantCount < request.desiredMemberCount && (
-            <p className="text-sm text-center text-slate-500 mt-3">
-              Waiting for more participants ({request.desiredMemberCount - participantCount} more needed)
-              before calculating.
+            <p className="mt-3 text-center text-sm text-slate-500">
+              {t.replyPage.waitingForMoreParticipants(
+                request.desiredMemberCount - participantCount,
+              )}
             </p>
           )}
         </section>
@@ -405,7 +399,7 @@ export default function ReplyToHangoutRequestPage() {
       <footer className="mt-12 text-center">
         <Link href="/hangouts">
           <Button variant="outline" className="border-slate-300 text-slate-600 hover:bg-slate-100">
-            Back to My Hangouts List
+            {t.replyPage.backToList}
           </Button>
         </Link>
       </footer>
@@ -433,10 +427,10 @@ export default function ReplyToHangoutRequestPage() {
           isOpen={!!slotToConfirm}
           onClose={() => setSlotToConfirm(null)}
           onConfirm={handleConfirmAndInvite}
-          title="Confirm and Send Invitations"
-          message="Confirm this slot and send invitations to all available participants? This cannot be undone."
-          confirmText="Yes, Confirm & Send Invites"
-          cancelText="Cancel"
+          title={t.replyPage.confirmTitle}
+          message={t.replyPage.confirmMessage}
+          confirmText={t.replyPage.confirmYes}
+          cancelText={t.replyPage.confirmCancel}
           isLoading={isConfirmingSlot}
         />
       )}

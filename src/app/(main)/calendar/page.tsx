@@ -1,7 +1,9 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useCallback, useMemo, useRef, useState } from 'react';
-import dynamic from 'next/dynamic';
+import nextDynamic from 'next/dynamic';
 import { isSameDay } from 'date-fns';
 import { CalendarEvent, CalendarEventUpdate } from '@/types/events';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,6 +15,7 @@ import { useCalendarStore } from '@/hooks/useCalendarStore';
 import { useCalendarView } from '@/hooks/useCalendarView';
 import { useTravelBuffers } from '@/hooks/useTravelBuffers';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
+import { useLanguage } from '@/hooks/useLanguage';
 import { useGoogleCalendarEvents, useGoogleStatus } from '@/lib/queries/google';
 import { CalendarPageHeader } from '@/components/calendar/CalendarPageHeader';
 import { StampPaletteSheet } from '@/components/calendar/StampPaletteSheet';
@@ -25,15 +28,20 @@ import DayDetailsModal from '@/components/calendar/DayDetailsModal';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import '@/styles/calendar.css';
 
-const DynamicCalendarView = dynamic(
+function CalendarLoading() {
+  const { t } = useLanguage();
+  return (
+    <div className="flex h-[calc(100vh-200px)] items-center justify-center">
+      <p className="text-gray-500">{t.calendarPage.loadingCalendar}</p>
+    </div>
+  );
+}
+
+const DynamicCalendarView = nextDynamic(
   () => import('@/components/calendar/CalendarView').then((mod) => mod.CalendarView),
   {
     ssr: false,
-    loading: () => (
-      <div className="flex justify-center items-center h-[calc(100vh-200px)]">
-        <p className="text-gray-500">Loading Calendar…</p>
-      </div>
-    ),
+    loading: CalendarLoading,
   },
 );
 
@@ -41,6 +49,7 @@ type PendingDelete = { id: string; type: 'event' | 'stamp' };
 
 export default function CalendarPage() {
   const { user, isGuest } = useAuth();
+  const { t } = useLanguage();
   const store = useCalendarStore();
   const { view, date, viewWindow, handleNavigate, handleViewChange } = useCalendarView('month');
   const { prefs } = useUserPreferences();
@@ -53,20 +62,14 @@ export default function CalendarPage() {
     defaultStart?: Date;
     defaultEnd?: Date;
   }>({ open: false, mode: 'create', event: null });
-  const [stampDialog, setStampDialog] = useState<{ open: boolean; stamp: CalendarEvent | null }>({
-    open: false,
-    stamp: null,
-  });
+  const [stampDialog, setStampDialog] = useState<{ open: boolean; stamp: CalendarEvent | null }>(
+    { open: false, stamp: null },
+  );
   const [dayDetails, setDayDetails] = useState<{ open: boolean; date: Date | null }>({
     open: false,
     date: null,
   });
-  const [selectedStampForPlacement, setSelectedStampForPlacement] = useState<CalendarEvent | null>(
-    null,
-  );
-  // Holds the stamp currently mid-drag from the palette. Ref because RBC's
-  // onDropFromOutside reads it during a synchronous drop callback and we don't
-  // want the drop handler to be re-created on every drag.
+  const [selectedStampForPlacement, setSelectedStampForPlacement] = useState<CalendarEvent | null>(null);
   const draggedStampRef = useRef<CalendarEvent | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -79,9 +82,6 @@ export default function CalendarPage() {
     isSignedIn && !!googleStatus?.connected,
   );
 
-  // Soft-deleted stamp definitions stay in Firestore (so their already-placed
-  // instances remain coherent) but should not surface in the palette, nor
-  // generate any new recurrence occurrences.
   const visibleEvents = useMemo(
     () => store.events.filter((e) => !(e.isStamp && !e.originalStampId && e.stampDeletedAt)),
     [store.events],
@@ -96,18 +96,12 @@ export default function CalendarPage() {
   }, [visibleEvents, viewWindow, gcalEvents]);
 
   const travelBuffers = useTravelBuffers(displayedEvents, prefs.locationFeaturesEnabled);
-
   const masterStamps = useMemo(
     () => visibleEvents.filter((e) => e.isStamp && !e.originalStampId),
     [visibleEvents],
   );
-
   const stampUsage = useMemo(() => buildStampUsageMap(store.events), [store.events]);
 
-  /**
-   * Top stamps to surface in the day right-click context menu:
-   * pinned first, then by total usage. Capped at 5 for menu readability.
-   */
   const contextMenuStamps = useMemo(() => {
     const sorted = [...masterStamps].sort((a, b) => {
       if (!!a.stampPinned !== !!b.stampPinned) return a.stampPinned ? -1 : 1;
@@ -155,15 +149,12 @@ export default function CalendarPage() {
     setEventDialog({ open: true, mode: 'edit', event });
   }, []);
 
-  const closeEventDialog = useCallback(
-    () => setEventDialog((s) => ({ ...s, open: false })),
-    [],
-  );
+  const closeEventDialog = useCallback(() => setEventDialog((s) => ({ ...s, open: false })), []);
 
   const handleSaveEvent = useCallback(
     async (data: CalendarEventUpdate & { id?: string; title?: string; start?: Date; end?: Date }) => {
       if (!user && !isGuest) {
-        showErrorToast('Please sign in to save events.');
+        showErrorToast(t.calendarPage.pleaseSignInSaveEvents);
         return;
       }
       try {
@@ -176,10 +167,10 @@ export default function CalendarPage() {
             end: data.end ? new Date(data.end) : undefined,
           };
           await store.updateEvent(data.id, update);
-          showSuccessToast('Event updated successfully!');
+          showSuccessToast(t.calendarPage.eventUpdated);
         } else {
           if (!data.title || !data.start || !data.end) {
-            showErrorToast('Title, start, and end are required.');
+            showErrorToast(t.calendarPage.titleStartEndRequired);
             return;
           }
           const newEvent: Omit<CalendarEvent, 'id'> = {
@@ -189,26 +180,25 @@ export default function CalendarPage() {
             allDay: data.allDay || false,
             color: data.color ?? undefined,
             isStamp: false,
-            // Strip nulls (only meaningful for updates) on create.
             location: data.location ?? undefined,
             travelMode: data.travelMode ?? undefined,
           };
           await store.addEvent(newEvent);
-          showSuccessToast('Event added successfully!');
+          showSuccessToast(t.calendarPage.eventAdded);
         }
         closeEventDialog();
       } catch (err) {
         console.error('Error saving event:', err);
-        showErrorToast('Failed to save event.');
+        showErrorToast(t.calendarPage.failedSaveEvent);
       }
     },
-    [user, isGuest, eventDialog.mode, store, closeEventDialog],
+    [user, isGuest, eventDialog.mode, store, closeEventDialog, t],
   );
 
   const handleSaveStamp = useCallback(
     async (data: CalendarEventUpdate & { id?: string; title: string; start: Date; end: Date }) => {
       if (!user && !isGuest) {
-        showErrorToast('Please sign in to save stamps.');
+        showErrorToast(t.calendarPage.pleaseSignInSaveStamps);
         return;
       }
       try {
@@ -222,7 +212,7 @@ export default function CalendarPage() {
             repeatEndDate: data.repeatEndDate ? new Date(data.repeatEndDate) : undefined,
           };
           await store.updateEvent(data.id, update);
-          showSuccessToast('Stamp updated successfully!');
+          showSuccessToast(t.calendarPage.stampUpdated);
         } else {
           const newStamp: Omit<CalendarEvent, 'id'> = {
             title: data.title,
@@ -240,15 +230,15 @@ export default function CalendarPage() {
             travelMode: data.travelMode ?? undefined,
           };
           await store.addEvent(newStamp);
-          showSuccessToast('Stamp added successfully!');
+          showSuccessToast(t.calendarPage.stampAdded);
         }
         setStampDialog({ open: false, stamp: null });
       } catch (err) {
         console.error('Error saving stamp:', err);
-        showErrorToast('Failed to save stamp.');
+        showErrorToast(t.calendarPage.failedSaveStamp);
       }
     },
-    [user, isGuest, store],
+    [user, isGuest, store, t],
   );
 
   const handleApplyStamp = useCallback(
@@ -284,31 +274,23 @@ export default function CalendarPage() {
       try {
         const newId = await store.addEvent(instance);
         showActionToast(
-          `Placed ${stamp.emoji ?? ''} ${instance.title}`.trim(),
-          'Undo',
+          t.calendarPage.placedSingle(stamp.emoji ?? '', instance.title),
+          t.common.undo,
           () => {
-            void store
-              .deleteEvent(newId)
-              .catch((err) => {
-                console.error('Error undoing stamp placement:', err);
-                showErrorToast('Could not undo placement.');
-              });
+            void store.deleteEvent(newId).catch((err) => {
+              console.error('Error undoing stamp placement:', err);
+              showErrorToast(t.calendarPage.couldNotUndoPlacement);
+            });
           },
         );
       } catch (err) {
         console.error('Error applying stamp:', err);
-        showErrorToast('Failed to apply stamp.');
+        showErrorToast(t.calendarPage.failedToApplyStamp);
       }
     },
-    [store],
+    [store, t],
   );
 
-  /**
-   * Apply a stamp to many days at once. One undo toast covers the whole batch.
-   * Adds are issued in parallel; partial failures are surfaced as a single
-   * error toast and don't roll back successful inserts (manual undo still works
-   * for those via the toast button).
-   */
   const handleApplyStampMany = useCallback(
     async (stamp: CalendarEvent, dropDates: Date[]) => {
       if (!stamp.isStamp || dropDates.length === 0) return;
@@ -343,22 +325,22 @@ export default function CalendarPage() {
       const results = await Promise.allSettled(instances.map((i) => store.addEvent(i)));
       const newIds = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
       const failed = results.length - newIds.length;
-      if (failed > 0) showErrorToast(`Failed to place ${failed} of ${results.length}.`);
+      if (failed > 0) showErrorToast(t.calendarPage.failedToPlaceCount(failed, results.length));
       if (newIds.length === 0) return;
 
       showActionToast(
-        `Placed ${newIds.length} × ${stamp.emoji ?? ''} ${stamp.title}`.trim(),
-        'Undo',
+        t.calendarPage.placedMany(newIds.length, stamp.emoji ?? '', stamp.title),
+        t.common.undo,
         () => {
           void Promise.allSettled(newIds.map((id) => store.deleteEvent(id))).then((r) => {
             const failures = r.filter((x) => x.status === 'rejected').length;
-            if (failures > 0) showErrorToast(`Could not undo ${failures} placement(s).`);
-            else showInfoToast('Undone.');
+            if (failures > 0) showErrorToast(t.calendarPage.couldNotUndoPlacements(failures));
+            else showInfoToast(t.calendarPage.undone);
           });
         },
       );
     },
-    [store],
+    [store, t],
   );
 
   const handleDropFromOutside = useCallback(
@@ -375,9 +357,6 @@ export default function CalendarPage() {
   const handleSelectSlot = useCallback(
     (slot: { start: Date; end: Date; slots: Date[] | string[]; action: string }) => {
       if (selectedStampForPlacement) {
-        // Range-paint: when the user drags across multiple cells with a stamp
-        // armed, place one instance per unique day. Single-cell taps still
-        // route through the cheaper single-apply path.
         const dayKeys = new Set<string>();
         const days: Date[] = [];
         for (const raw of slot.slots ?? []) {
@@ -406,21 +385,19 @@ export default function CalendarPage() {
 
   const handleSelectEvent = useCallback(
     (event: CalendarEvent) => {
-      // Synthetic travel chips aren't editable — they're computed from the
-      // adjacent real events.
       const r = event.resource as { type?: string } | undefined;
       if (r?.type === 'travel') return;
       if (selectedStampForPlacement) {
         void handleApplyStamp(selectedStampForPlacement, event.start);
         return;
       }
-      if (isSimpleMode && view === 'month') {
-        setDayDetails({ open: true, date: event.start });
-      } else {
+      if (prefs.eventOpenMode === 'show_all') {
         openEditEvent(event);
+      } else {
+        setDayDetails({ open: true, date: event.start });
       }
     },
-    [selectedStampForPlacement, handleApplyStamp, isSimpleMode, view, openEditEvent],
+    [selectedStampForPlacement, handleApplyStamp, openEditEvent, prefs.eventOpenMode],
   );
 
   const confirmEventDelete = useCallback(async () => {
@@ -428,27 +405,23 @@ export default function CalendarPage() {
     setIsDeleting(true);
     try {
       await store.deleteEvent(pendingDelete.id);
-      showSuccessToast('Event deleted successfully!');
+      showSuccessToast(t.calendarPage.eventDeleted);
       closeEventDialog();
     } catch (err) {
       console.error('Delete failed:', err);
-      showErrorToast('Failed to delete.');
+      showErrorToast(t.calendarPage.failedToDeleteEvent);
     } finally {
       setIsDeleting(false);
       setPendingDelete(null);
     }
-  }, [pendingDelete, store, closeEventDialog]);
+  }, [pendingDelete, store, closeEventDialog, t]);
 
   const confirmStampDelete = useCallback(
     async (mode: 'soft' | 'cascade') => {
       if (!pendingDelete || pendingDelete.type !== 'stamp') return;
       try {
         await store.deleteStamp(pendingDelete.id, mode);
-        showSuccessToast(
-          mode === 'soft'
-            ? 'Stamp retired. Placed instances kept.'
-            : 'Stamp and all instances deleted.',
-        );
+        showSuccessToast(mode === 'soft' ? t.calendarPage.stampRetired : t.calendarPage.stampDeleted);
         setStampDialog({ open: false, stamp: null });
         if (selectedStampForPlacement?.id === pendingDelete.id) {
           setSelectedStampForPlacement(null);
@@ -456,10 +429,10 @@ export default function CalendarPage() {
         setPendingDelete(null);
       } catch (err) {
         console.error('Stamp delete failed:', err);
-        showErrorToast('Failed to delete stamp.');
+        showErrorToast(t.calendarPage.failedDeleteStamp);
       }
     },
-    [pendingDelete, store, selectedStampForPlacement],
+    [pendingDelete, store, selectedStampForPlacement, t],
   );
 
   const pendingStamp = useMemo(() => {
@@ -473,7 +446,7 @@ export default function CalendarPage() {
   }, [pendingDelete, store.events]);
 
   return (
-    <div className="p-2 md:p-6 flex flex-col md:flex-row gap-4">
+    <div className="flex flex-col gap-4 p-2 md:flex-row md:p-6">
       <div className="flex-grow">
         <CalendarPageHeader
           user={user}
@@ -508,20 +481,18 @@ export default function CalendarPage() {
         onNewStamp={() => setStampDialog({ open: true, stamp: null })}
         usage={stampUsage}
         onTogglePin={(stamp) => {
-          void store
-            .updateEvent(stamp.id, { stampPinned: !stamp.stampPinned })
-            .catch((err) => {
-              console.error('Error pinning stamp:', err);
-              showErrorToast('Could not update pin.');
-            });
+          void store.updateEvent(stamp.id, { stampPinned: !stamp.stampPinned }).catch((err) => {
+            console.error('Error pinning stamp:', err);
+            showErrorToast(t.calendarPage.couldNotUpdatePin);
+          });
         }}
         onAddPreset={(preset) => {
           void store
             .addEvent(presetToStamp(preset))
-            .then(() => showSuccessToast(`Added ${preset.emoji} ${preset.title}`))
+            .then(() => showSuccessToast(t.calendarPage.addedPreset(preset.emoji, preset.title)))
             .catch((err) => {
               console.error('Error adding preset stamp:', err);
-              showErrorToast('Could not add preset.');
+              showErrorToast(t.calendarPage.couldNotAddPreset);
             });
         }}
         onSharePack={isSignedIn ? () => setShareDialogOpen(true) : undefined}
@@ -565,9 +536,7 @@ export default function CalendarPage() {
         onClose={() => setStampDialog({ open: false, stamp: null })}
         onSave={handleSaveStamp}
         onRequestDelete={
-          stampDialog.stamp
-            ? () => setPendingDelete({ id: stampDialog.stamp!.id, type: 'stamp' })
-            : undefined
+          stampDialog.stamp ? () => setPendingDelete({ id: stampDialog.stamp!.id, type: 'stamp' }) : undefined
         }
         existingCategories={existingCategories}
       />
@@ -577,6 +546,7 @@ export default function CalendarPage() {
         onClose={() => setDayDetails({ open: false, date: null })}
         selectedDate={dayDetails.date}
         eventsOnDay={eventsForSelectedDay}
+        eventOpenMode={prefs.eventOpenMode}
         onAddEvent={(d) => {
           setDayDetails({ open: false, date: null });
           const start = new Date(d);
@@ -600,9 +570,9 @@ export default function CalendarPage() {
         isOpen={!!pendingDelete && pendingDelete.type === 'event'}
         onClose={() => setPendingDelete(null)}
         onConfirm={confirmEventDelete}
-        title="Confirm Deletion"
-        message="Delete this event?"
-        confirmText="Delete"
+        title={t.calendarPage.confirmDeletionTitle}
+        message={t.calendarPage.confirmDeletionMessage}
+        confirmText={t.calendarPage.confirmDeletionConfirm}
         isLoading={isDeleting}
       />
 

@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import Modal from '@/components/ui/modal';
 import { CalendarEvent, CalendarEventUpdate } from '@/types/events';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const DynamicEventForm = dynamic(() => import('@/components/calendar/EventForm'), {
   ssr: false,
@@ -32,11 +33,12 @@ export function EventDialog({
   onRequestDelete,
   onConvertToStamp,
 }: Props) {
+  const { t } = useLanguage();
   return (
-    <Modal
+      <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={mode === 'edit' ? 'Edit Event' : 'Create New Event'}
+      title={mode === 'edit' ? t.calendar.editEvent : t.calendar.createEvent}
       size="lg"
     >
       {isOpen && (

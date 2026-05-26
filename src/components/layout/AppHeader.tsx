@@ -1,4 +1,3 @@
-// src/components/layout/AppHeader.tsx
 'use client';
 
 import React from 'react';
@@ -6,11 +5,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/hooks/useLanguage';
 import {
   ArrowRightOnRectangleIcon,
   BellIcon,
   CalendarDaysIcon,
   Cog6ToothIcon,
+  UsersIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline';
 
@@ -22,92 +23,93 @@ interface AppHeaderProps {
 const AppHeader: React.FC<AppHeaderProps> = ({ onOpenNotifications, unreadNotificationsCount }) => {
   const { user, signOut, isGuest } = useAuth();
   const pathname = usePathname();
+  const { t } = useLanguage();
 
   const navItems = [
-    { href: '/calendar', label: 'Calendar', icon: CalendarDaysIcon },
-    { href: '/hangouts', label: 'Hangouts', icon: UserGroupIcon },
-    ...(user && !isGuest
-      ? [{ href: '/settings', label: 'Settings', icon: Cog6ToothIcon }]
-      : []),
+    { href: '/calendar', label: t.nav.calendar, icon: CalendarDaysIcon },
+    { href: '/hangouts', label: t.nav.hangouts, icon: UserGroupIcon },
+    { href: '/friends', label: t.nav.friends, icon: UsersIcon },
+    ...(user && !isGuest ? [{ href: '/settings', label: t.nav.settings, icon: Cog6ToothIcon }] : []),
   ];
 
   return (
-    <header className="bg-white shadow-sm sticky top-0 z-40">
-      <nav className="container mx-auto px-4 py-3 flex justify-between items-center">
+    <header className="sticky top-0 z-40 bg-white shadow-sm">
+      <nav className="container mx-auto flex items-center justify-between px-4 py-3">
         <Link
-          href={user && !isGuest ? "/calendar" : "/"} // Guests go to landing, users to calendar
-          className="text-2xl font-bold text-blue-600 hover:text-blue-700 transition-colors"
+          href={user && !isGuest ? '/calendar' : '/'}
+          className="text-2xl font-bold text-blue-600 transition-colors hover:text-blue-700"
         >
-           Hangly
+          {t.appName}
         </Link>
 
-        {/* Navigation and Actions - shown if user or guest */}
         {(user || isGuest) && (
           <div className="flex items-center space-x-2 sm:space-x-4">
             {navItems.map((item) => (
               <Link
                 key={item.label}
                 href={item.href}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors
-                  ${pathname === item.href
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                className={`rounded-md px-3 py-2 text-sm font-medium transition-colors
+                  ${
+                    pathname === item.href
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                   }`}
               >
-                <item.icon className="h-5 w-5 inline-block sm:mr-1.5" aria-hidden="true" />
+                <item.icon className="inline-block h-5 w-5 sm:mr-1.5" aria-hidden="true" />
                 <span className="hidden sm:inline">{item.label}</span>
               </Link>
             ))}
 
-            {/* Notification Button - only for logged-in (non-guest) users */}
             {user && !isGuest && (
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={onOpenNotifications}
-                className="relative text-gray-600 hover:bg-gray-100 hover:text-gray-900 p-2"
-                title="Notifications"
+                className="relative p-2 text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                title={t.nav.notifications}
               >
                 <BellIcon className="h-6 w-6" />
                 {unreadNotificationsCount > 0 && (
-                  <span 
-                      className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white"
-                      aria-label={`${unreadNotificationsCount} unread notifications`}
+                  <span
+                    className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white"
+                    aria-label={`${unreadNotificationsCount} unread notifications`}
                   >
-                     {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                    {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
                   </span>
                 )}
               </Button>
             )}
-            
-            {/* Sign Out / Sign In for Guest */}
+
             {user && !isGuest && (
-                <Button variant="outline" size="sm" onClick={signOut} title="Sign Out">
-                    <ArrowRightOnRectangleIcon className="h-5 w-5 sm:mr-1.5"/>
-                    <span className="hidden sm:inline">Sign Out</span>
-                </Button>
+              <Button variant="outline" size="sm" onClick={signOut} title={t.nav.signOut}>
+                <ArrowRightOnRectangleIcon className="h-5 w-5 sm:mr-1.5" />
+                <span className="hidden sm:inline">{t.nav.signOut}</span>
+              </Button>
             )}
-             {isGuest && ( // If user is a guest
-                 <Link href="/sign-in">
-                    <Button variant="outline" size="sm">Sign In / Sign Up</Button>
-                 </Link>
-             )}
+            {isGuest && (
+              <Link href="/sign-in">
+                <Button variant="outline" size="sm">
+                  {t.nav.signInSignUp}
+                </Button>
+              </Link>
+            )}
           </div>
         )}
-        
-        {/* Fallback for when no user and not guest (e.g. on landing page if this header were to be used there) */}
-        {/* And not on auth pages themselves */}
-        {!user && !isGuest && 
-            (pathname !== '/sign-in' && pathname !== '/sign-up') && 
-             <div className="space-x-2">
-                <Link href="/sign-in">
-                    <Button variant="outline" size="sm">Sign In</Button>
-                </Link>
-                <Link href="/sign-up">
-                    <Button variant="default" size="sm">Sign Up</Button>
-                </Link>
-             </div>
-        }
+
+        {!user && !isGuest && pathname !== '/sign-in' && pathname !== '/sign-up' && (
+          <div className="space-x-2">
+            <Link href="/sign-in">
+              <Button variant="outline" size="sm">
+                {t.nav.signIn}
+              </Button>
+            </Link>
+            <Link href="/sign-up">
+              <Button variant="default" size="sm">
+                {t.nav.signUp}
+              </Button>
+            </Link>
+          </div>
+        )}
       </nav>
     </header>
   );

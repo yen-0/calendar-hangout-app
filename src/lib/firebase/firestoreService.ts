@@ -247,6 +247,7 @@ const hangoutRequestFromFirestore = (docSnap: DocumentSnapshot<DocumentData>): H
         desiredMemberCount: data.desiredMemberCount,
         dateRanges: dateRangesClient,       // CONVERTED
         timeRanges: data.timeRanges,        // Assuming string, no conversion
+        recipientUids: data.recipientUids ?? [],
         participants: participantsClient,   // CONVERTED
         commonAvailabilitySlots: commonAvailabilitySlotsClient, // CONVERTED
         finalSelectedSlot: finalSelectedSlotClient,             // CONVERTED
@@ -258,10 +259,12 @@ export const createHangoutRequest = async (
   creatorUid: string,
   creatorName: string,
   formData: HangoutRequestFormData,
-  creatorEvents: ParticipantEventClient[] // Expecting client dates
+  creatorEvents: ParticipantEventClient[], // Expecting client dates
+  recipientUids: string[] = [],
 ): Promise<string> => {
   try {
     const newRequestRef = doc(collection(db, HANGOUT_REQUESTS_COLLECTION));
+    const normalizedRecipients = Array.from(new Set(recipientUids.filter((uid) => uid && uid !== creatorUid)));
 
     const creatorParticipantDataFirestore: ParticipantDataFirestore = {
       uid: creatorUid,
@@ -285,12 +288,34 @@ export const createHangoutRequest = async (
       desiredMemberCount: Number(formData.desiredMemberCount),
       dateRanges: convertDateRangesToTimestamps(formData.dateRanges), // Converts client dates to Timestamps
       timeRanges: formData.timeRanges,
+      recipientUids: normalizedRecipients,
       participants: {
         [creatorUid]: creatorParticipantDataFirestore,
       },
     };
 
     await setDoc(newRequestRef, newRequestData);
+
+    if (normalizedRecipients.length > 0) {
+      const batch = writeBatch(db);
+      for (const participantUid of normalizedRecipients) {
+        const notifRef = doc(collection(db, `userNotifications/${participantUid}/notifications`));
+        batch.set(notifRef, {
+          type: 'hangout_request',
+          hangoutRequestId: newRequestRef.id,
+          hangoutRequestName: formData.requestName,
+          creatorName,
+          creatorUid,
+          isRead: false,
+          createdAt: Timestamp.now(),
+          message: `${creatorName} invited you to "${formData.requestName}".`,
+          participantUid,
+          relatedUrl: `/hangouts/reply/${newRequestRef.id}`,
+        });
+      }
+      await batch.commit();
+    }
+
     return newRequestRef.id;
   } catch (error) {
     console.error('Error creating hangout request:', error);
@@ -301,15 +326,18 @@ export const createHangoutRequest = async (
 // This function should return data suitable for client state (i.e., with JS Dates)
 export const fetchHangoutRequestsForUser = async (userId: string): Promise<HangoutRequestClientState[]> => {
   try {
-    const createdQuery = query(
+    const createdQuery = query(collection(db, HANGOUT_REQUESTS_COLLECTION), where('creatorUid', '==', userId));
+    const invitedQuery = query(
       collection(db, HANGOUT_REQUESTS_COLLECTION),
-      where('creatorUid', '==', userId),
-      // Consider adding: orderBy('createdAt', 'desc')
+      where('recipientUids', 'array-contains', userId),
     );
 
-    const querySnapshot = await getDocs(createdQuery);
+    const [createdSnapshot, invitedSnapshot] = await Promise.all([getDocs(createdQuery), getDocs(invitedQuery)]);
+    const docsById = new Map<string, DocumentSnapshot<DocumentData>>();
+    createdSnapshot.docs.forEach((docSnap) => docsById.set(docSnap.id, docSnap));
+    invitedSnapshot.docs.forEach((docSnap) => docsById.set(docSnap.id, docSnap));
     // Map Firestore documents to the client-side state type
-    return querySnapshot.docs.map(docSnap => hangoutRequestFromFirestore(docSnap));
+    return [...docsById.values()].map((docSnap) => hangoutRequestFromFirestore(docSnap));
   } catch (error) {
     console.error('Error fetching hangout requests:', error);
     throw new Error('Failed to fetch hangout requests.');

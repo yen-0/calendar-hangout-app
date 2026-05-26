@@ -16,6 +16,7 @@ import {
   deleteStampPack,
 } from '@/lib/firebase/firestoreService';
 import { showErrorToast, showInfoToast, showSuccessToast } from '@/lib/toasts';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface Props {
   isOpen: boolean;
@@ -24,13 +25,6 @@ interface Props {
   onClose: () => void;
 }
 
-/**
- * Pack-creation + management dialog. Two sections:
- *  - Top: pick stamps, name the pack, get a shareable URL.
- *  - Bottom: list of the user's existing packs with revoke / unrevoke / delete.
- *    Owners can still see revoked packs in this list (per Firestore rules),
- *    so they can resurrect a link if needed.
- */
 export function StampPackShareDialog({ isOpen, stamps, ownerUid, onClose }: Props) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -38,6 +32,7 @@ export function StampPackShareDialog({ isOpen, stamps, ownerUid, onClose }: Prop
   const [busy, setBusy] = useState(false);
   const [packs, setPacks] = useState<StampPackClient[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (!isOpen || !ownerUid) return;
@@ -91,7 +86,7 @@ export function StampPackShareDialog({ isOpen, stamps, ownerUid, onClose }: Prop
       });
       const url = `${window.location.origin}/stamps/pack/${id}`;
       await navigator.clipboard?.writeText(url).catch(() => {});
-      showSuccessToast('Pack link copied to clipboard!');
+      showSuccessToast(t.stamps.packCreated);
       setName('');
       setDescription('');
       setSelectedIds(new Set());
@@ -108,10 +103,10 @@ export function StampPackShareDialog({ isOpen, stamps, ownerUid, onClose }: Prop
     try {
       if (pack.revokedAt) {
         await unrevokeStampPack(pack.id);
-        showInfoToast('Pack restored.');
+        showInfoToast(t.stamps.packRestored);
       } else {
         await revokeStampPack(pack.id);
-        showInfoToast('Pack revoked. The link will 404.');
+        showInfoToast(t.stamps.packRevoked);
       }
       setRefreshKey((k) => k + 1);
     } catch (err) {
@@ -124,7 +119,7 @@ export function StampPackShareDialog({ isOpen, stamps, ownerUid, onClose }: Prop
     if (!confirm(`Permanently delete pack "${pack.name}"? This cannot be undone.`)) return;
     try {
       await deleteStampPack(pack.id);
-      showInfoToast('Pack deleted.');
+      showInfoToast(t.stamps.packDeleted);
       setRefreshKey((k) => k + 1);
     } catch (err) {
       console.error('Error deleting pack:', err);
@@ -135,15 +130,15 @@ export function StampPackShareDialog({ isOpen, stamps, ownerUid, onClose }: Prop
   const copyLink = (packId: string) => {
     const url = `${window.location.origin}/stamps/pack/${packId}`;
     void navigator.clipboard?.writeText(url);
-    showInfoToast('Link copied.');
+    showInfoToast(t.stamps.copy);
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Share stamp pack" size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title={t.stamps.sharePack} size="lg">
       <div className="space-y-5">
         <section className="space-y-3">
           <div>
-            <Label htmlFor="pack-name">Pack name</Label>
+            <Label htmlFor="pack-name">{t.stamps.packName}</Label>
             <Input
               id="pack-name"
               value={name}
@@ -153,7 +148,7 @@ export function StampPackShareDialog({ isOpen, stamps, ownerUid, onClose }: Prop
             />
           </div>
           <div>
-            <Label htmlFor="pack-desc">Description (optional)</Label>
+            <Label htmlFor="pack-desc">{t.stamps.packDescription}</Label>
             <Input
               id="pack-desc"
               value={description}
@@ -163,20 +158,18 @@ export function StampPackShareDialog({ isOpen, stamps, ownerUid, onClose }: Prop
             />
           </div>
           <div>
-            <Label>Stamps to include</Label>
+            <Label>{t.stamps.stampsToInclude}</Label>
             {stamps.length === 0 && (
-              <p className="text-xs text-gray-500 mt-1">
-                No stamps to share yet — create some first.
-              </p>
+              <p className="mt-1 text-xs text-gray-500">No stamps to share yet — create some first.</p>
             )}
             {stamps.length > 0 && (
-              <div className="mt-1 grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+              <div className="mt-1 max-h-48 grid grid-cols-2 gap-2 overflow-y-auto">
                 {stamps.map((stamp) => {
                   const selected = selectedIds.has(stamp.id);
                   return (
                     <label
                       key={stamp.id}
-                      className={`flex items-center gap-2 p-2 rounded border cursor-pointer text-sm ${selected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:bg-gray-50'}`}
+                      className={`flex cursor-pointer items-center gap-2 rounded border p-2 text-sm ${selected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:bg-gray-50'}`}
                     >
                       <input
                         type="checkbox"
@@ -184,7 +177,7 @@ export function StampPackShareDialog({ isOpen, stamps, ownerUid, onClose }: Prop
                         onChange={() => toggle(stamp.id)}
                         className="h-4 w-4"
                       />
-                      <span className="text-lg flex-shrink-0">{stamp.emoji}</span>
+                      <span className="flex-shrink-0 text-lg">{stamp.emoji}</span>
                       <span className="truncate">{stamp.title}</span>
                     </label>
                   );
@@ -194,44 +187,44 @@ export function StampPackShareDialog({ isOpen, stamps, ownerUid, onClose }: Prop
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button
               onClick={handleCreate}
               isLoading={busy}
               disabled={busy || stamps.length === 0}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              className="bg-indigo-600 text-white hover:bg-indigo-700"
             >
-              Create &amp; copy link
+              {t.stamps.createCopyLink}
             </Button>
           </div>
         </section>
 
         {packs.length > 0 && (
-          <section className="pt-4 border-t space-y-2">
+          <section className="space-y-2 border-t pt-4">
             <h3 className="text-sm font-semibold">Your packs</h3>
-            <div className="space-y-2 max-h-56 overflow-y-auto">
+            <div className="max-h-56 space-y-2 overflow-y-auto">
               {packs.map((pack) => (
                 <div
                   key={pack.id}
-                  className={`flex items-center gap-2 text-sm p-2 rounded border ${pack.revokedAt ? 'bg-gray-50 border-gray-200 text-gray-500' : 'border-gray-200'}`}
+                  className={`flex items-center gap-2 rounded border p-2 text-sm ${pack.revokedAt ? 'border-gray-200 bg-gray-50 text-gray-500' : 'border-gray-200'}`}
                 >
-                  <div className="flex-grow min-w-0">
+                  <div className="min-w-0 flex-grow">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">{pack.name}</span>
+                      <span className="truncate font-medium">{pack.name}</span>
                       <span className="text-xs text-gray-400">
                         {pack.stamps.length} stamp{pack.stamps.length === 1 ? '' : 's'}
                       </span>
                       {pack.revokedAt && (
-                        <span className="text-[10px] uppercase tracking-wide rounded bg-red-100 text-red-700 px-1.5 py-0.5">
-                          Revoked
+                        <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-red-700">
+                          {t.stamps.revoked}
                         </span>
                       )}
                     </div>
                   </div>
                   {!pack.revokedAt && (
                     <Button variant="ghost" size="sm" onClick={() => copyLink(pack.id)}>
-                      Copy
+                      {t.stamps.copy}
                     </Button>
                   )}
                   <Button
@@ -240,15 +233,10 @@ export function StampPackShareDialog({ isOpen, stamps, ownerUid, onClose }: Prop
                     onClick={() => handleRevoke(pack)}
                     className={pack.revokedAt ? 'text-green-700' : 'text-amber-700'}
                   >
-                    {pack.revokedAt ? 'Restore' : 'Revoke'}
+                    {pack.revokedAt ? t.stamps.packRestore : t.stamps.packRevoke}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(pack)}
-                    className="text-red-700"
-                  >
-                    Delete
+                  <Button variant="ghost" size="sm" onClick={() => handleDelete(pack)} className="text-red-700">
+                    {t.stamps.packDelete}
                   </Button>
                 </div>
               ))}
@@ -259,3 +247,4 @@ export function StampPackShareDialog({ isOpen, stamps, ownerUid, onClose }: Prop
     </Modal>
   );
 }
+

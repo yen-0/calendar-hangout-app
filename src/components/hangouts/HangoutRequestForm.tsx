@@ -1,26 +1,20 @@
-// src/components/hangouts/HangoutRequestForm.tsx
 'use client';
 
 import React, { useState } from 'react';
-// Import DateRangeClient instead of DateRange
 import { HangoutRequestFormData, DateRangeClient, TimeRange } from '@/types/hangouts';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-// import { Textarea } from '@/components/ui/textarea'; // Assuming you might use it later
 import { XCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid';
+import { useLanguage } from '@/hooks/useLanguage';
 
-// Helper to format Date to 'yyyy-MM-dd' for date input
 const formatDateForDateInput = (date: Date | undefined | null): string => {
-    if (!date) return '';
-    // Ensure the date is treated as local when converting to ISO string for date input
-    // to avoid timezone shifts making it appear as the previous day.
-    const tempDate = new Date(date);
-    const offset = tempDate.getTimezoneOffset();
-    const localizedDate = new Date(tempDate.getTime() - (offset*60*1000));
-    return localizedDate.toISOString().split('T')[0];
+  if (!date) return '';
+  const tempDate = new Date(date);
+  const offset = tempDate.getTimezoneOffset();
+  const localizedDate = new Date(tempDate.getTime() - offset * 60 * 1000);
+  return localizedDate.toISOString().split('T')[0];
 };
-
 
 interface HangoutRequestFormProps {
   onSave: (formData: HangoutRequestFormData) => Promise<void>;
@@ -36,28 +30,22 @@ const HangoutRequestForm: React.FC<HangoutRequestFormProps> = ({
   initialData,
 }) => {
   const [requestName, setRequestName] = useState(initialData?.requestName || '');
-  // Use DateRangeClient for the state and initial data
   const [dateRanges, setDateRanges] = useState<DateRangeClient[]>(
-    initialData?.dateRanges || [{ start: new Date(), end: new Date() }]
+    initialData?.dateRanges || [{ start: new Date(), end: new Date() }],
   );
   const [timeRanges, setTimeRanges] = useState<TimeRange[]>(
-    initialData?.timeRanges || [{ start: '09:00', end: '17:00' }]
+    initialData?.timeRanges || [{ start: '09:00', end: '17:00' }],
   );
   const [desiredDurationMinutes, setDesiredDurationMinutes] = useState(
-    initialData?.desiredDurationMinutes || 60
+    initialData?.desiredDurationMinutes || 60,
   );
-  const [desiredMarginMinutes, setDesiredMarginMinutes] = useState(
-    initialData?.desiredMarginMinutes || 0
-  );
-  const [desiredMemberCount, setDesiredMemberCount] = useState(
-    initialData?.desiredMemberCount || 2
-  );
+  const [desiredMarginMinutes, setDesiredMarginMinutes] = useState(initialData?.desiredMarginMinutes || 0);
+  const [desiredMemberCount, setDesiredMemberCount] = useState(initialData?.desiredMemberCount || 2);
+  const { t } = useLanguage();
 
-  // Use DateRangeClient for the field type
   const handleDateRangeChange = (index: number, field: keyof DateRangeClient, value: string) => {
     const newDateRanges = [...dateRanges];
-    const newDateFromInput = new Date(value + 'T00:00:00'); // Ensure parsing as local date at midnight
-
+    const newDateFromInput = new Date(value + 'T00:00:00');
     newDateRanges[index] = { ...newDateRanges[index], [field]: newDateFromInput };
     setDateRanges(newDateRanges);
   };
@@ -76,19 +64,30 @@ const HangoutRequestForm: React.FC<HangoutRequestFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!requestName.trim()) { alert("Request Name is required."); return; }
-    if (dateRanges.some(dr => !dr.start || !dr.end || new Date(dr.end) < new Date(dr.start))) {
-        alert("All date ranges must have a valid start and end, with end date being on or after start date."); return;
+    if (!requestName.trim()) {
+      alert(t.forms.titleRequired);
+      return;
     }
-    if (timeRanges.some(tr => !tr.start || !tr.end || tr.end <= tr.start)) {
-        alert("All time ranges must have a valid start and end, with end time after start time (e.g., 09:00 to 17:00)."); return;
+    if (dateRanges.some((dr) => !dr.start || !dr.end || new Date(dr.end) < new Date(dr.start))) {
+      alert('日付範囲には有効な開始日と終了日が必要です。終了日は開始日と同日かそれ以降にしてください。');
+      return;
     }
-    if (desiredDurationMinutes <= 0) { alert("Duration must be positive."); return; }
-    if (desiredMemberCount < 2) { alert("Member count must be at least 2."); return; }
+    if (timeRanges.some((tr) => !tr.start || !tr.end || tr.end <= tr.start)) {
+      alert('時間帯には有効な開始時刻と終了時刻が必要です。終了時刻は開始時刻より後にしてください（例: 09:00 から 17:00）。');
+      return;
+    }
+    if (desiredDurationMinutes <= 0) {
+      alert('所要時間は 1 以上にしてください。');
+      return;
+    }
+    if (desiredMemberCount < 2) {
+      alert('参加人数は 2 人以上にしてください。');
+      return;
+    }
 
     await onSave({
       requestName,
-      dateRanges, // This is already DateRangeClient[]
+      dateRanges,
       timeRanges,
       desiredDurationMinutes,
       desiredMarginMinutes,
@@ -97,24 +96,23 @@ const HangoutRequestForm: React.FC<HangoutRequestFormProps> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 p-1 max-h-[80vh] overflow-y-auto">
+    <form onSubmit={handleSubmit} className="max-h-[80vh] space-y-6 overflow-y-auto p-1">
       <div>
-        <Label htmlFor="requestName">Request Name</Label>
+        <Label htmlFor="requestName">{t.forms.requestName}</Label>
         <Input id="requestName" value={requestName} onChange={(e) => setRequestName(e.target.value)} required />
       </div>
 
-      {/* Date Ranges */}
       <div className="space-y-3">
-        <div className="flex justify-between items-center">
-          <Label>Date Ranges (when can people meet?)</Label>
+        <div className="flex items-center justify-between">
+          <Label>{t.forms.dateRanges}</Label>
           <Button type="button" variant="ghost" size="sm" onClick={addDateRange} className="text-blue-600">
-            <PlusCircleIcon className="h-5 w-5 mr-1" /> Add Date Range
+            <PlusCircleIcon className="mr-1 h-5 w-5" /> {t.forms.addDateRange}
           </Button>
         </div>
         {dateRanges.map((range, index) => (
-          <div key={index} className="flex items-center gap-2 p-2 border rounded-md">
+          <div key={index} className="flex items-center gap-2 rounded-md border p-2">
             <div className="flex-1">
-              <Label htmlFor={`dateRange-start-${index}`}>From</Label>
+              <Label htmlFor={`dateRange-start-${index}`}>{t.forms.from}</Label>
               <Input
                 id={`dateRange-start-${index}`}
                 type="date"
@@ -124,7 +122,7 @@ const HangoutRequestForm: React.FC<HangoutRequestFormProps> = ({
               />
             </div>
             <div className="flex-1">
-              <Label htmlFor={`dateRange-end-${index}`}>To</Label>
+              <Label htmlFor={`dateRange-end-${index}`}>{t.forms.to}</Label>
               <Input
                 id={`dateRange-end-${index}`}
                 type="date"
@@ -142,19 +140,17 @@ const HangoutRequestForm: React.FC<HangoutRequestFormProps> = ({
         ))}
       </div>
 
-      {/* Time Ranges */}
       <div className="space-y-3">
-        {/* ... Time Ranges JSX remains the same ... */}
-        <div className="flex justify-between items-center">
-          <Label>Time Ranges (within each selected day)</Label>
+        <div className="flex items-center justify-between">
+          <Label>{t.forms.timeRanges}</Label>
           <Button type="button" variant="ghost" size="sm" onClick={addTimeRange} className="text-blue-600">
-             <PlusCircleIcon className="h-5 w-5 mr-1" /> Add Time Range
+            <PlusCircleIcon className="mr-1 h-5 w-5" /> {t.forms.addTimeRange}
           </Button>
         </div>
         {timeRanges.map((range, index) => (
-          <div key={index} className="flex items-center gap-2 p-2 border rounded-md">
+          <div key={index} className="flex items-center gap-2 rounded-md border p-2">
             <div className="flex-1">
-              <Label htmlFor={`timeRange-start-${index}`}>From</Label>
+              <Label htmlFor={`timeRange-start-${index}`}>{t.forms.from}</Label>
               <Input
                 id={`timeRange-start-${index}`}
                 type="time"
@@ -164,7 +160,7 @@ const HangoutRequestForm: React.FC<HangoutRequestFormProps> = ({
               />
             </div>
             <div className="flex-1">
-              <Label htmlFor={`timeRange-end-${index}`}>To</Label>
+              <Label htmlFor={`timeRange-end-${index}`}>{t.forms.to}</Label>
               <Input
                 id={`timeRange-end-${index}`}
                 type="time"
@@ -181,31 +177,29 @@ const HangoutRequestForm: React.FC<HangoutRequestFormProps> = ({
           </div>
         ))}
       </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* ... Desired Duration, Margin, Member Count JSX remains the same ... */}
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-            <Label htmlFor="desiredDuration">Desired Duration (minutes)</Label>
-            <Input id="desiredDuration" type="number" min="15" step="15" value={desiredDurationMinutes} onChange={(e) => setDesiredDurationMinutes(parseInt(e.target.value, 10))} required />
+          <Label htmlFor="desiredDuration">{t.forms.desiredDuration}</Label>
+          <Input id="desiredDuration" type="number" min="15" step="15" value={desiredDurationMinutes} onChange={(e) => setDesiredDurationMinutes(parseInt(e.target.value, 10))} required />
         </div>
         <div>
-            <Label htmlFor="desiredMargin">Buffer/Margin (minutes before/after)</Label>
-            <Input id="desiredMargin" type="number" min="0" step="5" value={desiredMarginMinutes} onChange={(e) => setDesiredMarginMinutes(parseInt(e.target.value, 10))} required />
+          <Label htmlFor="desiredMargin">{t.forms.desiredMargin}</Label>
+          <Input id="desiredMargin" type="number" min="0" step="5" value={desiredMarginMinutes} onChange={(e) => setDesiredMarginMinutes(parseInt(e.target.value, 10))} required />
         </div>
       </div>
 
       <div>
-        <Label htmlFor="desiredMemberCount">Desired Number of Members</Label>
+        <Label htmlFor="desiredMemberCount">{t.forms.desiredMemberCount}</Label>
         <Input id="desiredMemberCount" type="number" min="2" value={desiredMemberCount} onChange={(e) => setDesiredMemberCount(parseInt(e.target.value, 10))} required />
       </div>
 
-      <div className="flex justify-end space-x-3 pt-4 border-t mt-6">
-        {/* ... Buttons JSX remains the same ... */}
+      <div className="mt-6 flex justify-end space-x-3 border-t pt-4">
         <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
-          Cancel
+          {t.common.cancel}
         </Button>
-        <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white" isLoading={isLoading} disabled={isLoading}>
-          {isLoading ? 'Creating...' : 'Create Request'}
+        <Button type="submit" className="bg-blue-600 text-white hover:bg-blue-700" isLoading={isLoading} disabled={isLoading}>
+          {isLoading ? t.forms.creating : t.forms.createRequest}
         </Button>
       </div>
     </form>

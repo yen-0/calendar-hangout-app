@@ -14,13 +14,23 @@ export interface UserPreferences {
    * buffers render between adjacent events. Default false — opt-in.
    */
   locationFeaturesEnabled: boolean;
+  /**
+   * UI language for the app shell and screen copy.
+   */
+  language: 'ja' | 'en';
+  /**
+   * Controls how much detail is revealed when opening an event.
+   */
+  eventOpenMode: 'hide_all' | 'show_time' | 'show_all';
 }
 
-const STORAGE_KEY = 'hangly:prefs:v1';
+const STORAGE_KEY = 'hangly:prefs:v2';
 const EVENT_NAME = 'hangly:prefchange';
 
 const DEFAULTS: UserPreferences = {
   locationFeaturesEnabled: false,
+  language: 'ja',
+  eventOpenMode: 'show_time',
 };
 
 function readPrefs(): UserPreferences {

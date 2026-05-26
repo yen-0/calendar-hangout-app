@@ -3,6 +3,7 @@
 import { ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface ModalProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ const sizeClasses = {
  * Preserves the original API: <Modal isOpen onClose title size>{...}</Modal>.
  */
 const Modal = ({ isOpen, onClose, title, children, size = 'md' }: ModalProps) => {
+  const { t } = useLanguage();
   return (
     <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
@@ -43,7 +45,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }: ModalProps) =>
               <Dialog.Close asChild>
                 <button
                   className="text-gray-400 hover:text-gray-600 transition-colors"
-                  aria-label="Close modal"
+                  aria-label={t.common.close}
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -63,7 +65,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }: ModalProps) =>
               </Dialog.Close>
             </div>
           )}
-          {!title && <Dialog.Title className="sr-only">Dialog</Dialog.Title>}
+          {!title && <Dialog.Title className="sr-only">{t.common.close}</Dialog.Title>}
           <div>{children}</div>
         </Dialog.Content>
       </Dialog.Portal>

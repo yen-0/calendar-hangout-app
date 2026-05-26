@@ -1,19 +1,20 @@
-// src/components/calendar/DayDetailsModal.tsx
 'use client';
 
 import React from 'react';
 import { CalendarEvent } from '@/types/events';
-import Modal from '@/components/ui/modal'; // Your generic Modal component
+import Modal from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface DayDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedDate: Date | null;
   eventsOnDay: CalendarEvent[];
-  onAddEvent: (date: Date) => void; // Callback to open the EventForm modal
-  onEditEvent: (event: CalendarEvent) => void; // Callback to edit an existing event
+  eventOpenMode?: 'hide_all' | 'show_time' | 'show_all';
+  onAddEvent: (date: Date) => void;
+  onEditEvent: (event: CalendarEvent) => void;
 }
 
 const DayDetailsModal: React.FC<DayDetailsModalProps> = ({
@@ -24,51 +25,50 @@ const DayDetailsModal: React.FC<DayDetailsModalProps> = ({
   onAddEvent,
   onEditEvent,
 }) => {
+  const { t } = useLanguage();
   if (!isOpen || !selectedDate) return null;
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Events for ${format(selectedDate, 'EEEE, MMMM d, yyyy')}`}
+      title={t.calendar.eventForDay(format(selectedDate, 'EEEE, MMMM d, yyyy'))}
       size="md"
     >
-      <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+      <div className="max-h-[60vh] space-y-4 overflow-y-auto">
         {eventsOnDay.length > 0 ? (
           eventsOnDay
-            .sort((a,b) => a.start.getTime() - b.start.getTime()) // Sort events by start time
-            .map(event => (
-            <div 
-                key={event.id} 
-                className="p-3 rounded-md border flex justify-between items-center"
-                style={{ borderColor: event.color || '#e5e7eb', backgroundColor: `${event.color}1A` /* light bg */ }}
-                onClick={() => onEditEvent(event)} // Allow clicking event to edit
+            .sort((a, b) => a.start.getTime() - b.start.getTime())
+            .map((event) => (
+              <div
+                key={event.id}
+                className="flex items-center justify-between rounded-md border p-3"
+                style={{ borderColor: event.color || '#e5e7eb', backgroundColor: `${event.color}1A` }}
+                onClick={() => onEditEvent(event)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => e.key === 'Enter' && onEditEvent(event)}
-            >
+              >
                 <div className="flex items-center">
-                    {event.isStamp && event.emoji && <span className="text-xl mr-2">{event.emoji}</span>}
-                    <div>
-                        <p className="font-semibold text-sm" style={{color: event.color || 'inherit'}}>{event.title}</p>
-                        <p className="text-xs text-gray-600">
-                            {event.allDay ? 'All Day' : `${format(event.start, 'p')} - ${format(event.end, 'p')}`}
-                        </p>
-                    </div>
+                  {event.isStamp && event.emoji && <span className="mr-2 text-xl">{event.emoji}</span>}
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: event.color || 'inherit' }}>
+                      {event.title}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      {event.allDay ? t.calendar.allDay : `${format(event.start, 'p')} - ${format(event.end, 'p')}`}
+                    </p>
+                  </div>
                 </div>
-                {/* <Button variant="ghost" size="sm" onClick={() => onEditEvent(event)}>Edit</Button> */}
-            </div>
-          ))
+              </div>
+            ))
         ) : (
-          <p className="text-gray-500 text-center py-4">No events scheduled for this day.</p>
+          <p className="py-4 text-center text-gray-500">{t.calendar.noEventsForDay}</p>
         )}
       </div>
-      <div className="mt-6 pt-4 border-t">
-        <Button
-          onClick={() => onAddEvent(selectedDate)}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-        >
-          + Add New Event for {format(selectedDate, 'MMM d')}
+      <div className="mt-6 border-t pt-4">
+        <Button onClick={() => onAddEvent(selectedDate)} className="w-full bg-blue-600 text-white hover:bg-blue-700">
+          {t.calendar.addEventForDay(format(selectedDate, 'MMM d'))}
         </Button>
       </div>
     </Modal>

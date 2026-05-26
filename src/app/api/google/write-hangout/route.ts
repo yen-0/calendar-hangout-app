@@ -53,7 +53,7 @@ async function writeForParticipant(
     summary: body.title,
     start: { dateTime: body.startISO },
     end: { dateTime: body.endISO },
-    description: `Confirmed via Hangly hangout request ${body.hangoutRequestId}.`,
+    description: `Confirmed via ツドイ hangout request ${body.hangoutRequestId}.`,
   };
 
   // Try create first; if it already exists, fall back to update.

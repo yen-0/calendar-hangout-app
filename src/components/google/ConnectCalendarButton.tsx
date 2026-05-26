@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { disconnectGoogle, getGoogleStatus, startGoogleConnect } from '@/lib/google/client';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface Props {
   /** Forces a re-check of connection status when this changes (e.g. after redirect). */
@@ -14,6 +15,7 @@ export function ConnectCalendarButton({ refreshKey, onStatusChange }: Props) {
   const [connected, setConnected] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useLanguage();
 
   useEffect(() => {
     let cancelled = false;
@@ -27,12 +29,12 @@ export function ConnectCalendarButton({ refreshKey, onStatusChange }: Props) {
       .catch((e: unknown) => {
         if (cancelled) return;
         setConnected(false);
-        setError(e instanceof Error ? e.message : 'Failed to check status');
+        setError(e instanceof Error ? e.message : t.google.loadError);
       });
     return () => {
       cancelled = true;
     };
-  }, [refreshKey, onStatusChange]);
+  }, [refreshKey, onStatusChange, t.google.loadError]);
 
   const handleConnect = async () => {
     setBusy(true);
@@ -41,7 +43,7 @@ export function ConnectCalendarButton({ refreshKey, onStatusChange }: Props) {
       const url = await startGoogleConnect();
       window.location.href = url;
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to start Google connect');
+      setError(e instanceof Error ? e.message : t.google.connectError);
       setBusy(false);
     }
   };
@@ -54,14 +56,14 @@ export function ConnectCalendarButton({ refreshKey, onStatusChange }: Props) {
       setConnected(false);
       onStatusChange?.(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to disconnect');
+      setError(e instanceof Error ? e.message : t.google.disconnectError);
     } finally {
       setBusy(false);
     }
   };
 
   if (connected === null) {
-    return <div className="text-sm text-gray-500">Checking Google Calendar connection…</div>;
+    return <div className="text-sm text-gray-500">{t.google.checking}</div>;
   }
 
   return (
@@ -71,16 +73,14 @@ export function ConnectCalendarButton({ refreshKey, onStatusChange }: Props) {
           className={`inline-block h-2 w-2 rounded-full ${connected ? 'bg-green-500' : 'bg-gray-300'}`}
           aria-hidden
         />
-        <span className="text-sm">
-          {connected ? 'Google Calendar connected' : 'Not connected'}
-        </span>
+        <span className="text-sm">{connected ? t.google.connected : t.google.notConnected}</span>
         {connected ? (
           <Button variant="outline" size="sm" onClick={handleDisconnect} disabled={busy}>
-            Disconnect
+            {t.google.disconnect}
           </Button>
         ) : (
           <Button variant="default" size="sm" onClick={handleConnect} disabled={busy}>
-            Connect Google Calendar
+            {t.google.connect}
           </Button>
         )}
       </div>
@@ -88,3 +88,4 @@ export function ConnectCalendarButton({ refreshKey, onStatusChange }: Props) {
     </div>
   );
 }
+

@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import Modal from '@/components/ui/modal';
 import { CalendarEvent, CalendarEventUpdate } from '@/types/events';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const DynamicStampForm = dynamic(() => import('@/components/calendar/StampForm'), {
   ssr: false,
@@ -26,11 +27,12 @@ export function StampDialog({
   onRequestDelete,
   existingCategories,
 }: Props) {
+  const { t } = useLanguage();
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={stamp ? 'Edit Stamp' : 'Create New Stamp'}
+      title={stamp ? t.calendar.editStamp : t.calendar.createStamp}
       size="lg"
     >
       {isOpen && (

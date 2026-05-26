@@ -43,8 +43,15 @@ export function useCreateHangoutRequest() {
       creatorName: string;
       formData: HangoutRequestFormData;
       creatorEvents: ParticipantEventClient[];
+      recipientUids?: string[];
     }) =>
-      createHangoutRequest(args.creatorUid, args.creatorName, args.formData, args.creatorEvents),
+      createHangoutRequest(
+        args.creatorUid,
+        args.creatorName,
+        args.formData,
+        args.creatorEvents,
+        args.recipientUids ?? [],
+      ),
     onSuccess: (_id, vars) =>
       qc.invalidateQueries({ queryKey: queryKeys.hangoutRequests.list(vars.creatorUid) }),
   });

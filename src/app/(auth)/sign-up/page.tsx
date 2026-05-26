@@ -6,6 +6,7 @@ import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase/config';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useLanguage } from '@/hooks/useLanguage';
 
 export default function SignUpPage() {
   const [email, setEmail] = useState('');
@@ -13,26 +14,24 @@ export default function SignUpPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const { t } = useLanguage();
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError('パスワードが一致しません。');
       return;
     }
     if (password.length < 6) {
-      setError("Password should be at least 6 characters.");
+      setError('パスワードは 6 文字以上にしてください。');
       return;
     }
 
     setIsLoading(true);
     try {
       await createUserWithEmailAndPassword(auth, email, password);
-      // AuthProvider's onAuthStateChanged will handle redirect
-      // Or, you can explicitly redirect here:
-      // router.push('/calendar'); // Or a "verify email" page
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to sign up. Please try again.';
       setError(message);
@@ -44,11 +43,11 @@ export default function SignUpPage() {
 
   return (
     <>
-      <h2 className="text-3xl font-bold text-center text-gray-800">Create Account</h2>
+      <h2 className="text-center text-3xl font-bold text-gray-800">{t.auth.signUpTitle}</h2>
       <form onSubmit={handleSignUp} className="mt-8 space-y-6">
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-            Email address
+            {t.auth.email}
           </label>
           <Input
             id="email"
@@ -58,13 +57,13 @@ export default function SignUpPage() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
+            placeholder={t.auth.emailPlaceholder}
           />
         </div>
 
         <div>
           <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-            Password
+            {t.auth.password}
           </label>
           <Input
             id="password"
@@ -80,7 +79,7 @@ export default function SignUpPage() {
 
         <div>
           <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700">
-            Confirm Password
+            {t.auth.confirmPassword}
           </label>
           <Input
             id="confirm-password"
@@ -98,14 +97,14 @@ export default function SignUpPage() {
 
         <div>
           <Button type="submit" className="w-full" isLoading={isLoading} disabled={isLoading}>
-            {isLoading ? 'Creating Account...' : 'Sign Up'}
+            {isLoading ? t.common.loading : t.auth.signUp}
           </Button>
         </div>
       </form>
       <p className="mt-6 text-center text-sm text-gray-600">
-        Already have an account?{' '}
+        {t.auth.alreadyMember}{' '}
         <Link href="/sign-in" className="font-medium text-blue-600 hover:text-blue-500">
-          Sign In
+          {t.auth.signIn}
         </Link>
       </p>
     </>

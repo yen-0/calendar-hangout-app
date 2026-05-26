@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 
 import type { StampUsageStats } from '@/utils/stampStats';
 import { STAMP_PRESETS, StampPreset } from '@/lib/stampPresets';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface Props {
   stamps: CalendarEvent[];
@@ -59,6 +60,7 @@ export function StampPalette({
   variant = 'sidebar',
 }: Props) {
   const [query, setQuery] = useState('');
+  const { t } = useLanguage();
 
   const { pinned, others } = useMemo(() => {
     const filtered = stamps.filter((s) => matchesQuery(s, query));
@@ -84,7 +86,7 @@ export function StampPalette({
       <div
         className={`flex justify-between items-center gap-2 ${isSheet ? '' : 'border-b pb-2 mb-3'}`}
       >
-        {!isSheet && <h2 className="text-lg font-semibold">Your Stamps</h2>}
+        {!isSheet && <h2 className="text-lg font-semibold">{t.stamps.yourStamps}</h2>}
         <div className={`flex items-center gap-2 ${isSheet ? 'ml-auto' : ''}`}>
           {onSharePack && stamps.length > 0 && (
             <Button
@@ -92,13 +94,13 @@ export function StampPalette({
               size="sm"
               variant="ghost"
               className="whitespace-nowrap text-xs"
-              title="Share a pack of stamps"
+              title={t.stamps.sharePack}
             >
-              Share…
+              {t.stamps.share}
             </Button>
           )}
           <Button onClick={onNewStamp} size="sm" variant="outline" className="whitespace-nowrap">
-            + New Stamp
+            {t.stamps.addNewStamp}
           </Button>
         </div>
       </div>
@@ -106,24 +108,22 @@ export function StampPalette({
       {stamps.length > 0 && (
         <Input
           type="search"
-          placeholder="Search stamps…"
+          placeholder={t.stamps.searchStamps}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className={isSheet ? '' : 'mb-3'}
-          aria-label="Search stamps"
+          aria-label={t.stamps.searchStamps}
         />
       )}
 
       {stamps.length === 0 && !onAddPreset && (
         <p className="text-xs text-gray-500 mb-3 text-center py-2">
-          No stamps defined yet. Click &ldquo;+ New Stamp&rdquo; to create one.
+          {t.stamps.noStamps}
         </p>
       )}
       {stamps.length === 0 && onAddPreset && (
         <div className="space-y-2">
-          <p className="text-xs text-gray-500">
-            Start with one of these, or create your own.
-          </p>
+          <p className="text-xs text-gray-500">{t.stamps.startWithPreset}</p>
           <div className="grid grid-cols-2 gap-2">
             {STAMP_PRESETS.map((preset) => (
               <button
@@ -145,13 +145,11 @@ export function StampPalette({
         </div>
       )}
       {stamps.length > 0 && !selectedStamp && totalAfterFilter > 0 && (
-        <p className="text-xs text-gray-500">
-          Drag a stamp onto the calendar, or tap one to arm it and tap days to place.
-        </p>
+        <p className="text-xs text-gray-500">{t.stamps.dragHint}</p>
       )}
       {stamps.length > 0 && totalAfterFilter === 0 && (
         <p className="text-xs text-gray-500 text-center py-2">
-          No stamps match &ldquo;{query}&rdquo;.
+          {t.stamps.noMatchesQuery(query)}
         </p>
       )}
 
@@ -159,7 +157,7 @@ export function StampPalette({
         <div className={`space-y-3 ${listMaxHeight}`}>
           {pinned.length > 0 && (
             <StampGroup
-              label="Pinned"
+              label={t.stamps.pinned}
               stamps={pinned}
               selectedStamp={selectedStamp}
               onSelect={onSelect}
@@ -172,7 +170,7 @@ export function StampPalette({
           )}
           {others.length > 0 && (
             <StampGroup
-              label={pinned.length > 0 ? 'All stamps' : undefined}
+              label={pinned.length > 0 ? t.stamps.allStamps : undefined}
               stamps={others}
               selectedStamp={selectedStamp}
               onSelect={onSelect}
@@ -212,6 +210,7 @@ function StampGroup({
   onDragEndStamp,
   usage,
 }: StampGroupProps) {
+  const { t } = useLanguage();
   return (
     <div className="space-y-2">
       {label && (
@@ -224,11 +223,7 @@ function StampGroup({
         return (
           <div
             key={stamp.id}
-            title={
-              isSelected
-                ? `"${stamp.title}" is selected. Click a date to place it.`
-                : `Select "${stamp.title}" to place on calendar.`
-            }
+            title={isSelected ? t.stamps.selectedTooltip(stamp.title) : t.stamps.unselectedTooltip(stamp.title)}
             draggable
             onDragStart={(e) => {
               e.dataTransfer.effectAllowed = 'copy';
@@ -258,7 +253,7 @@ function StampGroup({
                   if (!stats || stats.total === 0) return null;
                   return (
                     <span className="text-[10px] text-gray-500 leading-tight">
-                      {stats.total} placed{stats.thisMonth > 0 ? ` · ${stats.thisMonth} this month` : ''}
+                      {t.stamps.placedStats(stats.total, stats.thisMonth)}
                     </span>
                   );
                 })()}
@@ -277,7 +272,7 @@ function StampGroup({
                   e.stopPropagation();
                   onTogglePin(stamp);
                 }}
-                title={stamp.stampPinned ? 'Unpin stamp' : 'Pin stamp'}
+                title={stamp.stampPinned ? t.stamps.unpinStamp : t.stamps.pinStamp}
                 aria-pressed={!!stamp.stampPinned}
               >
                 <svg
@@ -304,7 +299,7 @@ function StampGroup({
                 e.stopPropagation();
                 onEdit(stamp);
               }}
-              title="Edit Stamp"
+              title={t.stamps.editStamp}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"

@@ -3,10 +3,12 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, ReactNode } from 'react';
+import { useLanguage } from '@/hooks/useLanguage';
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   const { user, loading, isGuest } = useAuth();
   const router = useRouter();
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (!loading && (user || isGuest)) {
@@ -18,7 +20,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     // Show a loading spinner or a blank page while checking auth state or redirecting
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p>Loading...</p> {/* Replace with a proper spinner component */}
+        <p>{t.common.loading}</p>
       </div>
     );
   }

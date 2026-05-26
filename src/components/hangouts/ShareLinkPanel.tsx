@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { showErrorToast, showInfoToast } from '@/lib/toasts';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface Props {
   requestId: string;
@@ -12,6 +13,7 @@ interface Props {
 export function ShareLinkPanel({ requestId }: Props) {
   const link =
     typeof window !== 'undefined' ? `${window.location.origin}/hangouts/reply/${requestId}` : '';
+  const { t } = useLanguage();
 
   const copy = useCallback(() => {
     if (!link) return;
@@ -21,22 +23,21 @@ export function ShareLinkPanel({ requestId }: Props) {
     }
     navigator.clipboard
       .writeText(link)
-      .then(() => showInfoToast('Link copied to clipboard!'))
+      .then(() => showInfoToast(t.hangouts.shareLinkCopied))
       .catch(() => showErrorToast('Failed to copy link.'));
-  }, [link]);
+  }, [link, t.hangouts.shareLinkCopied]);
 
   return (
-    <div className="mb-6 p-4 bg-green-100 border border-green-300 rounded-md shadow">
-      <h3 className="text-lg font-semibold text-green-700">Request Created!</h3>
-      <p className="text-sm text-green-600 mb-2">
-        Share this link with others to collect their availability:
-      </p>
+    <div className="mb-6 rounded-md border border-green-300 bg-green-100 p-4 shadow">
+      <h3 className="text-lg font-semibold text-green-700">{t.hangouts.requestCreated}</h3>
+      <p className="mb-2 text-sm text-green-600">{t.hangouts.shareThisLink}</p>
       <div className="flex items-center gap-2">
         <Input type="text" readOnly value={link} className="bg-white" />
         <Button onClick={copy} variant="outline">
-          Copy Link
+          {t.common.copy}
         </Button>
       </div>
     </div>
   );
 }
+

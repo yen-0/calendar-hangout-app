@@ -105,6 +105,7 @@ export interface HangoutRequest {
   desiredMemberCount: number;
   dateRanges: DateRangeFirestore[];
   timeRanges: TimeRange[]; // Stays as string HH:mm
+  recipientUids?: string[];
   participants: {
     [userId: string]: ParticipantDataFirestore;
   };
@@ -128,6 +129,7 @@ export interface HangoutRequestClientState {
   desiredMemberCount: number;
   dateRanges: DateRangeClient[]; // Uses JS Date
   timeRanges: TimeRange[];
+  recipientUids?: string[];
   participants: {
     [userId: string]: ParticipantDataClient; // Uses client version
   };
@@ -143,6 +145,7 @@ export interface HangoutRequestFormData { // For the creation form
   desiredMemberCount: number;
   dateRanges: DateRangeClient[]; // Form uses JS Date
   timeRanges: TimeRange[];
+  recipientUids?: string[];
 }
 
 export interface ConfirmHangoutPayload { // For calling the Cloud Function (if used) or client-side logic

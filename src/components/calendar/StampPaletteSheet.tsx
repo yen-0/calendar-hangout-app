@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import type { StampUsageStats } from '@/utils/stampStats';
 import type { StampPreset } from '@/lib/stampPresets';
 import { StampPalette } from './StampPalette';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface Props {
   stamps: CalendarEvent[];
@@ -32,6 +33,7 @@ interface Props {
  */
 export function StampPaletteSheet(props: Props) {
   const [open, setOpen] = useState(false);
+  const { t } = useLanguage();
 
   const handleSheetSelect = (stamp: CalendarEvent | null) => {
     props.onSelect(stamp);
@@ -59,16 +61,16 @@ export function StampPaletteSheet(props: Props) {
       <div className="md:hidden">
         <Drawer.Root open={open} onOpenChange={setOpen}>
           <Drawer.Trigger asChild>
-            <Button
-              type="button"
-              className="fixed right-4 z-40 rounded-full shadow-lg bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 flex items-center gap-2"
-              style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
-              aria-label={`Open stamps (${props.stamps.length})`}
-            >
-              <span className="text-lg leading-none" aria-hidden="true">
-                🏷️
-              </span>
-              <span className="text-sm font-medium">Stamps</span>
+              <Button
+                type="button"
+                className="fixed right-4 z-40 rounded-full shadow-lg bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 flex items-center gap-2"
+                style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
+                aria-label={t.stamps.openStamps(props.stamps.length)}
+              >
+                <span className="text-lg leading-none" aria-hidden="true">
+                  🏷️
+                </span>
+              <span className="text-sm font-medium">{t.stamps.yourStamps}</span>
               {props.stamps.length > 0 && (
                 <span className="text-xs bg-white/20 rounded-full px-1.5 py-0.5">
                   {props.stamps.length}
@@ -81,7 +83,7 @@ export function StampPaletteSheet(props: Props) {
             <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 mt-24 flex h-[85vh] flex-col rounded-t-2xl bg-white outline-none">
               <div className="mx-auto my-2 h-1.5 w-12 flex-shrink-0 rounded-full bg-gray-300" />
               <div className="px-4 pb-2 flex items-center justify-between border-b">
-                <Drawer.Title className="text-lg font-semibold">Your Stamps</Drawer.Title>
+                <Drawer.Title className="text-lg font-semibold">{t.stamps.yourStamps}</Drawer.Title>
                 <Drawer.Description className="sr-only">
                   Tap a stamp to arm it for placement, then tap days on the calendar.
                 </Drawer.Description>

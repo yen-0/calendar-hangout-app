@@ -5,6 +5,7 @@ import { onAuthStateChanged, signOut as firebaseSignOut, User } from 'firebase/a
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase/config';
 import { useGuestMode } from './useGuestMode';
+import { upsertPublicUserProfile } from '@/lib/firebase/friendsService';
 
 type AuthState =
   | { status: 'loading'; user: null }
@@ -52,6 +53,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // A real Firebase user supersedes guest mode.
         setIsGuest(false);
         dispatch({ type: 'firebaseUser', user: firebaseUser });
+        void upsertPublicUserProfile({
+          uid: firebaseUser.uid,
+          displayName: firebaseUser.displayName,
+          email: firebaseUser.email,
+          photoURL: firebaseUser.photoURL,
+        }).catch((error) => {
+          console.error('Failed to sync public profile:', error);
+        });
       } else {
         dispatch({ type: 'firebaseNoUser' });
       }
