@@ -7,14 +7,22 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/hooks/useLanguage';
 
 export default function HomePage() {
-  const { user, loading, isGuest, signInAsGuest } = useAuth();
+  const { user, loading, isGuest, isPublicSession, signInAsGuest } = useAuth();
   const router = useRouter();
   const { t } = useLanguage();
 
   useEffect(() => {
     if (loading) return;
-    if (user || isGuest) router.replace('/calendar');
-  }, [user, loading, isGuest, router]);
+    if (isGuest) {
+      router.replace('/calendar');
+      return;
+    }
+    if (isPublicSession) {
+      router.replace('/hangouts');
+      return;
+    }
+    if (user) router.replace('/calendar');
+  }, [isGuest, isPublicSession, loading, router, user]);
 
   if (loading || user || isGuest) {
     return (
@@ -58,9 +66,15 @@ export default function HomePage() {
             >
               {t.home.ctaSignIn}
             </Link>
+            <Link
+              href="/hangouts"
+              className="w-full rounded-lg border border-indigo-200 bg-indigo-50 px-7 py-3 text-base font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-100 sm:w-auto"
+            >
+              {t.home.ctaPublic}
+            </Link>
             <button
               type="button"
-              onClick={signInAsGuest}
+              onClick={() => void signInAsGuest()}
               className="w-full rounded-lg px-4 py-3 text-base font-medium text-gray-600 underline-offset-4 hover:text-indigo-700 hover:underline sm:w-auto"
             >
               {t.home.ctaGuest}
@@ -144,4 +158,3 @@ export default function HomePage() {
     </div>
   );
 }
-

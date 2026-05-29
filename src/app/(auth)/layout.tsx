@@ -6,15 +6,24 @@ import { useEffect, ReactNode } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
-  const { user, loading, isGuest } = useAuth();
+  const { user, loading, isGuest, isPublicSession } = useAuth();
   const router = useRouter();
   const { t } = useLanguage();
 
   useEffect(() => {
-    if (!loading && (user || isGuest)) {
-      router.replace('/calendar'); // Or your main app dashboard
+    if (loading) return;
+    if (isGuest) {
+      router.replace('/calendar');
+      return;
     }
-  }, [user, loading, isGuest, router]);
+    if (isPublicSession) {
+      router.replace('/hangouts');
+      return;
+    }
+    if (user) {
+      router.replace('/calendar');
+    }
+  }, [isGuest, isPublicSession, loading, router, user]);
 
   if (loading || user || isGuest) {
     // Show a loading spinner or a blank page while checking auth state or redirecting

@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   description:
     'Google カレンダーの予定を読み取り、確定した時間を全員のカレンダーへ書き戻す日程調整アプリです。',
   manifest: '/manifest.json',
-  icons: { icon: '/favicon.ico' },
+  icons: { icon: '/favicon.svg' },
   applicationName: 'ツドイ',
   appleWebApp: {
     capable: true,

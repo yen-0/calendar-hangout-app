@@ -82,8 +82,8 @@ export interface CalendarStore {
 }
 
 export function useCalendarStore(): CalendarStore {
-  const { user, isGuest } = useAuth();
-  const uid = user && !isGuest ? user.uid : undefined;
+  const { user, isGuest, isPublicSession } = useAuth();
+  const uid = user && !isGuest && !isPublicSession ? user.uid : undefined;
   const qc = useQueryClient();
 
   const query = useCalendarItems(uid);

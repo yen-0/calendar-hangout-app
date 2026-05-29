@@ -21,22 +21,25 @@ interface AppHeaderProps {
 }
 
 const AppHeader: React.FC<AppHeaderProps> = ({ onOpenNotifications, unreadNotificationsCount }) => {
-  const { user, signOut, isGuest } = useAuth();
+  const { user, signOut, isGuest, isPublicSession } = useAuth();
   const pathname = usePathname();
   const { t } = useLanguage();
+  const isSignedIn = !!user && !isPublicSession && !isGuest;
 
-  const navItems = [
-    { href: '/calendar', label: t.nav.calendar, icon: CalendarDaysIcon },
-    { href: '/hangouts', label: t.nav.hangouts, icon: UserGroupIcon },
-    { href: '/friends', label: t.nav.friends, icon: UsersIcon },
-    ...(user && !isGuest ? [{ href: '/settings', label: t.nav.settings, icon: Cog6ToothIcon }] : []),
-  ];
+  const navItems = isPublicSession
+    ? [{ href: '/hangouts', label: t.nav.hangouts, icon: UserGroupIcon }]
+    : [
+        { href: '/calendar', label: t.nav.calendar, icon: CalendarDaysIcon },
+        { href: '/hangouts', label: t.nav.hangouts, icon: UserGroupIcon },
+        { href: '/friends', label: t.nav.friends, icon: UsersIcon },
+        ...(isSignedIn ? [{ href: '/settings', label: t.nav.settings, icon: Cog6ToothIcon }] : []),
+      ];
 
   return (
     <header className="sticky top-0 z-40 bg-white shadow-sm">
       <nav className="container mx-auto flex items-center justify-between px-4 py-3">
         <Link
-          href={user && !isGuest ? '/calendar' : '/'}
+          href={isSignedIn ? '/calendar' : isPublicSession ? '/hangouts' : '/'}
           className="text-2xl font-bold text-blue-600 transition-colors hover:text-blue-700"
         >
           {t.appName}
@@ -60,7 +63,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onOpenNotifications, unreadNotifi
               </Link>
             ))}
 
-            {user && !isGuest && (
+            {isSignedIn && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -80,8 +83,14 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onOpenNotifications, unreadNotifi
               </Button>
             )}
 
-            {user && !isGuest && (
+            {isSignedIn && (
               <Button variant="outline" size="sm" onClick={signOut} title={t.nav.signOut}>
+                <ArrowRightOnRectangleIcon className="h-5 w-5 sm:mr-1.5" />
+                <span className="hidden sm:inline">{t.nav.signOut}</span>
+              </Button>
+            )}
+            {isPublicSession && (
+              <Button variant="outline" size="sm" onClick={() => void signOut()} title={t.nav.signOut}>
                 <ArrowRightOnRectangleIcon className="h-5 w-5 sm:mr-1.5" />
                 <span className="hidden sm:inline">{t.nav.signOut}</span>
               </Button>

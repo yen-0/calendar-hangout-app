@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import nextDynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -57,7 +57,7 @@ function EditModalContent({
 }
 
 export default function HangoutsPage() {
-  const { user, loading: authLoading, isGuest } = useAuth();
+  const { user, loading: authLoading, isGuest, isPublicSession, ensurePublicSession } = useAuth();
   const requestsQuery = useHangoutRequestsForUser(user?.uid);
   const createMutation = useCreateHangoutRequest();
   const deleteMutation = useDeleteHangoutRequest();
@@ -68,8 +68,17 @@ export default function HangoutsPage() {
   const [pendingDelete, setPendingDelete] = useState<HangoutRequestClientState | null>(null);
   const [newlyCreatedId, setNewlyCreatedId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [publicSessionError, setPublicSessionError] = useState<string | null>(null);
 
   const requests = requestsQuery.data ?? [];
+
+  useEffect(() => {
+    if (authLoading || user || isGuest) return;
+    void ensurePublicSession().catch((error) => {
+      console.error('Failed to start public hangout session:', error);
+      setPublicSessionError('Could not start a public scheduling session.');
+    });
+  }, [authLoading, ensurePublicSession, isGuest, user]);
 
   const copyShareLink = useCallback(
     (id: string) => {
@@ -94,15 +103,18 @@ export default function HangoutsPage() {
       }
       setIsProcessing(true);
       try {
-        const userEvents = await fetchCalendarItems(user.uid);
+        const userEvents = isPublicSession ? [] : await fetchCalendarItems(user.uid);
         const creatorEvents = prepareCreatorEventsForRequest(
           userEvents,
           formData.dateRanges,
           formData.timeRanges,
         );
+        const creatorName = isPublicSession
+          ? t.hangouts.publicOrganizer
+          : user.displayName || user.email || 'Anonymous User';
         const id = await createMutation.mutateAsync({
           creatorUid: user.uid,
-          creatorName: user.displayName || user.email || 'Anonymous User',
+          creatorName,
           formData,
           creatorEvents,
         });
@@ -116,7 +128,7 @@ export default function HangoutsPage() {
         setIsProcessing(false);
       }
     },
-    [user, isGuest, createMutation, t.hangouts.createSuccess],
+    [createMutation, isGuest, isPublicSession, t.hangouts.createSuccess, t.hangouts.publicOrganizer, user],
   );
 
   const handleEditSaveDirect = useCallback(
@@ -178,16 +190,15 @@ export default function HangoutsPage() {
     }
   }, [pendingDelete, user, deleteMutation, requestsQuery, t.hangouts.requestDeleted]);
 
-  if (authLoading) return <div className="p-6 text-center">{t.hangouts.loadingAuth}</div>;
+  if (authLoading || (!user && !isGuest && !publicSessionError)) {
+    return <div className="p-6 text-center">{t.hangouts.loadingAuth}</div>;
+  }
 
-  if (isGuest) {
+  if (publicSessionError) {
     return (
-      <div className="p-6 text-center">
-        <p className="mb-4 text-lg">{t.hangouts.guestPromptTitle}</p>
-        <p className="mb-4 text-gray-600">{t.hangouts.guestPromptBody}</p>
-        <Link href="/sign-in">
-          <Button size="lg">{t.nav.signInSignUp}</Button>
-        </Link>
+      <div className="p-6 text-center text-red-600">
+        <p className="mb-2 text-lg font-semibold">{t.hangouts.guestPromptTitle}</p>
+        <p>{publicSessionError}</p>
       </div>
     );
   }
@@ -205,8 +216,16 @@ export default function HangoutsPage() {
 
   return (
     <div className="p-4 md:p-6">
+      {isPublicSession && (
+        <div className="mb-6 rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-indigo-900 shadow-sm">
+          <p className="text-sm font-semibold uppercase tracking-wide">{t.hangouts.publicRequestsIntroTitle}</p>
+          <p className="mt-1 text-sm">{t.hangouts.publicRequestsIntroBody}</p>
+        </div>
+      )}
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{t.hangouts.myRequests}</h1>
+        <h1 className="text-2xl font-semibold">
+          {isPublicSession ? t.hangouts.publicRequests : t.hangouts.myRequests}
+        </h1>
         <Button
           onClick={() => {
             setNewlyCreatedId(null);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { format } from 'date-fns';
@@ -11,11 +11,13 @@ import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import { HangoutDetailsCard } from '@/components/hangouts/HangoutDetailsCard';
 import { ConfirmedSlotBanner } from '@/components/hangouts/ConfirmedSlotBanner';
 import { CommonSlotsModal } from '@/components/hangouts/CommonSlotsModal';
+import { PublicAvailabilityForm } from '@/components/hangouts/PublicAvailabilityForm';
 import { useLanguage } from '@/hooks/useLanguage';
 import {
   CommonSlotClient,
   HangoutRequestClientState,
   ParticipantDataClient,
+  ParticipantEventClient,
 } from '@/types/hangouts';
 import {
   addCalendarItem,
@@ -30,7 +32,7 @@ import { CalendarEvent } from '@/types/events';
 import { writeHangoutToCalendars } from '@/lib/google/write-hangout-client';
 
 export default function ReplyToHangoutRequestPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, ensurePublicSession, isGuest, isPublicSession } = useAuth();
   const { t } = useLanguage();
   const params = useParams();
   const requestId = params?.requestId as string | undefined;
@@ -47,13 +49,33 @@ export default function ReplyToHangoutRequestPage() {
   const [isConfirmingSlot, setIsConfirmingSlot] = useState(false);
   const [slotToConfirm, setSlotToConfirm] = useState<CommonSlotClient | null>(null);
 
+  const currentParticipant = useMemo(
+    () => (user && request ? request.participants?.[user.uid] ?? null : null),
+    [request, user],
+  );
+  const currentParticipantEvents = currentParticipant?.events;
+
+  useEffect(() => {
+    if (authLoading || user || isGuest) return;
+    void ensurePublicSession().catch((error) => {
+      console.error('Failed to start public session:', error);
+      setPageError(t.replyPage.publicSessionFailed);
+      setIsLoading(false);
+    });
+  }, [authLoading, ensurePublicSession, isGuest, t.replyPage.publicSessionFailed, user]);
+
   const loadRequest = useCallback(async () => {
     if (!requestId) {
       setPageError(t.replyPage.requestIdMissing);
       setIsLoading(false);
       return;
     }
-    if (authLoading) return;
+    if (authLoading || (!user && !isGuest)) return;
+    if (isGuest) {
+      setPageError(t.replyPage.publicSessionRequired);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setPageError(null);
     try {
@@ -65,6 +87,8 @@ export default function ReplyToHangoutRequestPage() {
       setRequest(fetched);
       if (user && fetched.participants && fetched.participants[user.uid]) {
         setHasUserAlreadySubmitted(true);
+      } else {
+        setHasUserAlreadySubmitted(false);
       }
       if (fetched.status === 'results_ready' && fetched.commonAvailabilitySlots) {
         setCommonSlots(fetched.commonAvailabilitySlots);
@@ -78,14 +102,31 @@ export default function ReplyToHangoutRequestPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [requestId, authLoading, user, t]);
+  }, [authLoading, isGuest, requestId, t, user]);
 
   useEffect(() => {
-    loadRequest();
+    void loadRequest();
   }, [loadRequest]);
 
+  const syncLocalParticipant = useCallback(
+    (participant: ParticipantDataClient) => {
+      setHasUserAlreadySubmitted(true);
+      setRequest((prev) => {
+        if (!prev) return null;
+        const updatedParticipants = { ...prev.participants, [participant.uid]: participant };
+        const newStatus =
+          prev.status === 'pending' &&
+          Object.keys(updatedParticipants).length >= prev.desiredMemberCount
+            ? 'pending_calculation'
+            : prev.status;
+        return { ...prev, participants: updatedParticipants, status: newStatus };
+      });
+    },
+    [],
+  );
+
   const handleSubmitAvailability = useCallback(async () => {
-    if (!user || !request) {
+    if (!user || !request || isPublicSession) {
       showErrorToast(t.replyPage.notLoggedInOrNotLoaded);
       return;
     }
@@ -106,17 +147,7 @@ export default function ReplyToHangoutRequestPage() {
       };
       await addParticipantToHangoutRequest(request.id, user.uid, newParticipant);
       showSuccessToast(t.replyPage.availabilitySubmitted);
-      setHasUserAlreadySubmitted(true);
-      setRequest((prev) => {
-        if (!prev) return null;
-        const updatedParticipants = { ...prev.participants, [user.uid]: newParticipant };
-        const newStatus =
-          prev.status === 'pending' &&
-          Object.keys(updatedParticipants).length >= prev.desiredMemberCount
-            ? 'pending_calculation'
-            : prev.status;
-        return { ...prev, participants: updatedParticipants, status: newStatus };
-      });
+      syncLocalParticipant(newParticipant);
     } catch (err) {
       console.error('Error submitting availability:', err);
       setPageError(`${t.replyPage.failedToSubmitAvailability} ${(err as Error).message}`);
@@ -124,7 +155,36 @@ export default function ReplyToHangoutRequestPage() {
     } finally {
       setIsSubmittingAvailability(false);
     }
-  }, [user, request, t]);
+  }, [isPublicSession, request, syncLocalParticipant, t, user]);
+
+  const handleSubmitPublicAvailability = useCallback(
+    async (payload: { displayName: string; events: ParticipantEventClient[] }) => {
+      if (!user || !request || !isPublicSession) {
+        showErrorToast(t.replyPage.notLoggedInOrNotLoaded);
+        return;
+      }
+      setIsSubmittingAvailability(true);
+      setPageError(null);
+      try {
+        const newParticipant: ParticipantDataClient = {
+          uid: user.uid,
+          displayName: payload.displayName,
+          submittedAt: new Date(),
+          events: payload.events,
+        };
+        await addParticipantToHangoutRequest(request.id, user.uid, newParticipant);
+        showSuccessToast(t.replyPage.availabilitySubmitted);
+        syncLocalParticipant(newParticipant);
+      } catch (err) {
+        console.error('Error submitting public availability:', err);
+        setPageError(`${t.replyPage.failedToSubmitAvailability} ${(err as Error).message}`);
+        showErrorToast(t.replyPage.failedToSubmitAvailability);
+      } finally {
+        setIsSubmittingAvailability(false);
+      }
+    },
+    [isPublicSession, request, syncLocalParticipant, t, user],
+  );
 
   const handleCalculateCommonTimes = useCallback(async () => {
     if (!request) {
@@ -180,7 +240,7 @@ export default function ReplyToHangoutRequestPage() {
       return;
     }
     setSlotToConfirm(commonSlots[selectedFinalSlotIndex]);
-  }, [request, selectedFinalSlotIndex, commonSlots, user, t]);
+  }, [commonSlots, request, selectedFinalSlotIndex, t, user]);
 
   const handleConfirmAndInvite = useCallback(async () => {
     if (!request || !slotToConfirm || !user) {
@@ -251,27 +311,31 @@ export default function ReplyToHangoutRequestPage() {
       setIsResultsModalOpen(false);
       setSelectedFinalSlotIndex(null);
 
-      try {
-        const results = await writeHangoutToCalendars({
-          hangoutRequestId: request.id,
-          title: `Hangout: ${request.requestName}`,
-          startISO: slotStart.toISOString(),
-          endISO: slotEnd.toISOString(),
-          participantUids: availableParticipants ?? [],
-        });
-        const written = results.filter((r) => r.status === 'written' || r.status === 'updated').length;
-        const skipped = results.filter((r) => r.status === 'skipped_not_connected').length;
-        const errored = results.filter((r) => r.status === 'error').length;
-        if (written > 0) {
-          showInfoToast(t.replyPage.wroteEventToCalendars(written, skipped, errored));
-        } else if (skipped > 0 && errored === 0) {
-          showInfoToast(t.replyPage.noParticipantsConnected);
-        } else if (errored > 0) {
-          showErrorToast(t.replyPage.writeFailed(errored));
+      if (user && !isPublicSession) {
+        try {
+          const results = await writeHangoutToCalendars({
+            hangoutRequestId: request.id,
+            title: `Hangout: ${request.requestName}`,
+            startISO: slotStart.toISOString(),
+            endISO: slotEnd.toISOString(),
+            participantUids: availableParticipants ?? [],
+          });
+          const written = results.filter((r) => r.status === 'written' || r.status === 'updated').length;
+          const skipped = results.filter((r) => r.status === 'skipped_not_connected').length;
+          const errored = results.filter((r) => r.status === 'error').length;
+          if (written > 0) {
+            showInfoToast(t.replyPage.wroteEventToCalendars(written, skipped, errored));
+          } else if (skipped > 0 && errored === 0) {
+            showInfoToast(t.replyPage.noParticipantsConnected);
+          } else if (errored > 0) {
+            showErrorToast(t.replyPage.writeFailed(errored));
+          }
+        } catch (err) {
+          console.error('GCal write-back failed:', err);
+          showErrorToast(t.replyPage.couldNotPushCalendars);
         }
-      } catch (err) {
-        console.error('GCal write-back failed:', err);
-        showErrorToast(t.replyPage.couldNotPushCalendars);
+      } else {
+        showInfoToast(t.replyPage.publicWriteBackSkipped);
       }
     } catch (err) {
       console.error('Error confirming final slot:', err);
@@ -279,7 +343,7 @@ export default function ReplyToHangoutRequestPage() {
     } finally {
       setIsConfirmingSlot(false);
     }
-  }, [request, slotToConfirm, user, t]);
+  }, [isPublicSession, request, slotToConfirm, t, user]);
 
   if (authLoading || isLoading) {
     return <div className="p-6 text-center text-gray-500">{t.replyPage.loading}</div>;
@@ -297,12 +361,13 @@ export default function ReplyToHangoutRequestPage() {
   }
 
   const canSubmit =
-    user && !hasUserAlreadySubmitted && request.status !== 'confirmed' && request.status !== 'closed';
+    user && !isPublicSession && !hasUserAlreadySubmitted && request.status !== 'confirmed' && request.status !== 'closed';
   const canResubmit =
-    user && hasUserAlreadySubmitted && request.status !== 'confirmed' && request.status !== 'closed';
+    user && !isPublicSession && hasUserAlreadySubmitted && request.status !== 'confirmed' && request.status !== 'closed';
   const participantCount = Object.keys(request.participants || {}).length;
   const isCreator = !!user && user.uid === request.creatorUid;
   const showSlotsActions = request.status !== 'confirmed' && request.status !== 'closed';
+  const submitLabel = hasUserAlreadySubmitted ? t.replyPage.updateAvailability : t.replyPage.submitAvailability;
 
   return (
     <div className="mx-auto my-6 max-w-3xl rounded-2xl bg-white p-4 shadow-xl md:p-8">
@@ -312,7 +377,14 @@ export default function ReplyToHangoutRequestPage() {
         <ConfirmedSlotBanner slot={request.finalSelectedSlot} />
       )}
 
-      {user && request.status !== 'confirmed' && request.status !== 'closed' && (
+      {isPublicSession && (
+        <div className="mb-8 rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-indigo-900 shadow-sm">
+          <p className="text-sm font-semibold uppercase tracking-wide">{t.replyPage.publicFlowTitle}</p>
+          <p className="mt-1 text-sm">{t.replyPage.publicFlowBody}</p>
+        </div>
+      )}
+
+      {user && !isPublicSession && request.status !== 'confirmed' && request.status !== 'closed' && (
         <section className="mb-8 rounded-lg bg-slate-50 p-6">
           <h2 className="mb-4 text-xl font-semibold text-slate-700">{t.replyPage.yourParticipation}</h2>
           {canSubmit && (
@@ -340,10 +412,22 @@ export default function ReplyToHangoutRequestPage() {
         </section>
       )}
 
-      {!user && (
+      {isPublicSession && (
+        <section className="mb-8">
+          <PublicAvailabilityForm
+            initialName={currentParticipant?.displayName ?? ''}
+            initialEvents={currentParticipantEvents}
+            isLoading={isSubmittingAvailability}
+            submitLabel={submitLabel}
+            onSubmit={handleSubmitPublicAvailability}
+          />
+        </section>
+      )}
+
+      {!user && !isPublicSession && (
         <div className="mb-8 rounded-lg bg-yellow-50 p-6 text-center text-yellow-700">
-          <p className="mb-2 text-lg font-semibold">{t.replyPage.signInToParticipate}</p>
-          <p>{t.replyPage.signInToParticipateBody}</p>
+          <p className="mb-2 text-lg font-semibold">{t.replyPage.publicSessionRequired}</p>
+          <p>{t.replyPage.publicSessionRequiredBody}</p>
         </div>
       )}
 
