@@ -29,6 +29,11 @@ export interface ParticipantEventClient {
   tentative?: boolean;
 }
 
+export interface CandidateSlotClient {
+  start: Date;
+  end: Date;
+}
+
 // For participant's submitted data (client-side)
 export interface ParticipantDataClient {
   uid: string;
@@ -62,6 +67,11 @@ export interface ParticipantEventFirestore {
   start: Timestamp;
   end: Timestamp;
   tentative?: boolean;
+}
+
+export interface CandidateSlotFirestore {
+  start: Timestamp;
+  end: Timestamp;
 }
 
 export interface ParticipantDataFirestore {
@@ -105,6 +115,8 @@ export interface HangoutRequest {
   desiredMemberCount: number;
   dateRanges: DateRangeFirestore[];
   timeRanges: TimeRange[]; // Stays as string HH:mm
+  candidateSlotMinutes?: number;
+  candidateSlots?: CandidateSlotFirestore[];
   recipientUids?: string[];
   participants: {
     [userId: string]: ParticipantDataFirestore;
@@ -129,6 +141,8 @@ export interface HangoutRequestClientState {
   desiredMemberCount: number;
   dateRanges: DateRangeClient[]; // Uses JS Date
   timeRanges: TimeRange[];
+  candidateSlotMinutes?: number;
+  candidateSlots?: CandidateSlotClient[];
   recipientUids?: string[];
   participants: {
     [userId: string]: ParticipantDataClient; // Uses client version
@@ -145,6 +159,8 @@ export interface HangoutRequestFormData { // For the creation form
   desiredMemberCount: number;
   dateRanges: DateRangeClient[]; // Form uses JS Date
   timeRanges: TimeRange[];
+  candidateSlotMinutes?: number;
+  candidateSlots?: CandidateSlotClient[];
   recipientUids?: string[];
 }
 

@@ -27,9 +27,11 @@ import {
   FinalSelectedSlotClient,
   CommonSlotClient,
   DateRangeClient,
+  CandidateSlotClient,
   ParticipantDataFirestore,
   ParticipantEventFirestore,
   DateRangeFirestore,
+  CandidateSlotFirestore,
   CommonSlotFirestore,
 } from '@/types/hangouts';
 import { PackedStamp, StampPackClient, StampPackFirestore } from '@/types/stampPacks';
@@ -227,6 +229,12 @@ const hangoutRequestFromFirestore = (docSnap: DocumentSnapshot<DocumentData>): H
           availableParticipants: s.availableParticipants,
         }));
 
+      const candidateSlotsClient: CandidateSlotClient[] | undefined =
+        data.candidateSlots?.map((s: CandidateSlotFirestore) => ({
+          start: s.start.toDate(),
+          end: s.end.toDate(),
+        }));
+
       const finalSelectedSlotClient: FinalSelectedSlotClient | undefined =
         data.finalSelectedSlot && data.finalSelectedSlot.start && data.finalSelectedSlot.end
           ? {
@@ -247,6 +255,8 @@ const hangoutRequestFromFirestore = (docSnap: DocumentSnapshot<DocumentData>): H
         desiredMemberCount: data.desiredMemberCount,
         dateRanges: dateRangesClient,       // CONVERTED
         timeRanges: data.timeRanges,        // Assuming string, no conversion
+        candidateSlotMinutes: data.candidateSlotMinutes,
+        candidateSlots: candidateSlotsClient,
         recipientUids: data.recipientUids ?? [],
         participants: participantsClient,   // CONVERTED
         commonAvailabilitySlots: commonAvailabilitySlotsClient, // CONVERTED
@@ -288,6 +298,11 @@ export const createHangoutRequest = async (
       desiredMemberCount: Number(formData.desiredMemberCount),
       dateRanges: convertDateRangesToTimestamps(formData.dateRanges), // Converts client dates to Timestamps
       timeRanges: formData.timeRanges,
+      candidateSlotMinutes: formData.candidateSlotMinutes,
+      candidateSlots: formData.candidateSlots?.map((slot) => ({
+        start: Timestamp.fromDate(new Date(slot.start)),
+        end: Timestamp.fromDate(new Date(slot.end)),
+      })),
       recipientUids: normalizedRecipients,
       participants: {
         [creatorUid]: creatorParticipantDataFirestore,
@@ -394,7 +409,22 @@ export const addParticipantToHangoutRequest = async (
 
 export const updateHangoutRequestDetails = async (
   requestId: string,
-  dataToUpdate: Partial<Pick<HangoutRequest, 'requestName' | 'desiredMemberCount' | 'status' | 'finalSelectedSlot' | 'commonAvailabilitySlots' >>
+  dataToUpdate: Partial<
+    Pick<
+      HangoutRequest,
+      | 'requestName'
+      | 'desiredMemberCount'
+      | 'desiredDurationMinutes'
+      | 'desiredMarginMinutes'
+      | 'status'
+      | 'finalSelectedSlot'
+      | 'commonAvailabilitySlots'
+      | 'dateRanges'
+      | 'timeRanges'
+      | 'candidateSlotMinutes'
+      | 'candidateSlots'
+    >
+  >
   // Ensure that if 'finalSelectedSlot' or 'commonAvailabilitySlots' are passed, their dates are Timestamps
 ): Promise<void> => {
   try {

@@ -3,13 +3,11 @@
 export const dynamic = 'force-dynamic';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import nextDynamic from 'next/dynamic';
 import Link from 'next/link';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import Modal from '@/components/ui/modal';
 import { db } from '@/lib/firebase/config';
 import { useLanguage } from '@/hooks/useLanguage';
 import {
@@ -22,35 +20,16 @@ import {
   sendFriendRequest,
 } from '@/lib/firebase/friendsService';
 import { showErrorToast, showSuccessToast } from '@/lib/toasts';
-import { useCreateHangoutRequest } from '@/lib/queries/hangoutRequests';
-import { fetchCalendarItems } from '@/lib/firebase/firestoreService';
-import { prepareCreatorEventsForRequest } from '@/utils/hangoutUtils';
-import { HangoutRequestFormData } from '@/types/hangouts';
-
-function LoadingForm() {
-  const { t } = useLanguage();
-  return <p className="p-6 text-center">{t.friends.loadingForm}</p>;
-}
-
-const DynamicHangoutRequestForm = nextDynamic(
-  () => import('@/components/hangouts/HangoutRequestForm'),
-  {
-    ssr: false,
-    loading: LoadingForm,
-  },
-);
+import { useRouter } from 'next/navigation';
 
 export default function FriendsPage() {
   const { user, loading: authLoading, isGuest } = useAuth();
   const { t } = useLanguage();
-  const createMutation = useCreateHangoutRequest();
+  const router = useRouter();
   const [profiles, setProfiles] = useState<PublicUserProfileClient[]>([]);
   const [friendships, setFriendships] = useState<FriendshipRecordClient[]>([]);
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [inviteTarget, setInviteTarget] = useState<PublicUserProfileClient | null>(null);
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteProcessing, setInviteProcessing] = useState(false);
 
   const makeInitials = useCallback((name: string) => {
     const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
@@ -200,43 +179,8 @@ export default function FriendsPage() {
   );
 
   const handleInviteToHangout = useCallback((profile: PublicUserProfileClient) => {
-    setInviteTarget(profile);
-    setInviteOpen(true);
-  }, []);
-
-  const handleCreateHangout = useCallback(
-    async (formData: HangoutRequestFormData) => {
-      if (!user || !inviteTarget) {
-        showErrorToast(t.friends.missingUserOrInviteTarget);
-        return;
-      }
-      setInviteProcessing(true);
-      try {
-        const userEvents = await fetchCalendarItems(user.uid);
-        const creatorEvents = prepareCreatorEventsForRequest(
-          userEvents,
-          formData.dateRanges,
-          formData.timeRanges,
-        );
-        await createMutation.mutateAsync({
-          creatorUid: user.uid,
-          creatorName: user.displayName || user.email || 'Anonymous User',
-          formData,
-          creatorEvents,
-          recipientUids: [inviteTarget.uid],
-        });
-        showSuccessToast(t.friends.hangoutInviteSentTo(inviteTarget.displayName));
-        setInviteOpen(false);
-        setInviteTarget(null);
-      } catch (err) {
-        console.error('Failed to send hangout invite:', err);
-        showErrorToast(t.friends.failedToSendInvite((err as Error).message));
-      } finally {
-        setInviteProcessing(false);
-      }
-    },
-    [createMutation, inviteTarget, user, t],
-  );
+    router.push(`/hangouts/request?recipient=${encodeURIComponent(profile.uid)}`);
+  }, [router]);
 
   if (authLoading || isLoading) {
     return <div className="p-6 text-center text-gray-500">{t.friends.loadingFriends}</div>;
@@ -460,26 +404,6 @@ export default function FriendsPage() {
         </div>
       </section>
 
-      <Modal
-        isOpen={inviteOpen}
-        onClose={() => {
-          setInviteOpen(false);
-          setInviteTarget(null);
-        }}
-        title={inviteTarget ? t.friends.sendHangoutTo(inviteTarget.displayName) : t.friends.sendHangoutDialog}
-        size="lg"
-      >
-        {inviteTarget && (
-          <DynamicHangoutRequestForm
-            onSave={(formData) => handleCreateHangout(formData)}
-            onCancel={() => {
-              setInviteOpen(false);
-              setInviteTarget(null);
-            }}
-            isLoading={inviteProcessing}
-          />
-        )}
-      </Modal>
     </div>
   );
 }

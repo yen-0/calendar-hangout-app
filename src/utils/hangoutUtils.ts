@@ -6,6 +6,7 @@ import {
   ParticipantEventClient,
   HangoutRequestClientState,
   CommonSlotClient,
+  CandidateSlotClient,
 } from '@/types/hangouts';
 import { expandRecurringEvents } from './eventUtils';
 
@@ -48,11 +49,54 @@ import {
 export const prepareCreatorEventsForRequest = (
   userEvents: CalendarEvent[],
   requestDateRanges: DateRangeClient[],
-  requestTimeRanges: TimeRange[]
+  requestTimeRanges: TimeRange[],
+  requestCandidateSlots: CandidateSlotClient[] = []
 ): ParticipantEventClient[] => {
   const relevantEvents: ParticipantEventClient[] = [];
 
   if (!userEvents || userEvents.length === 0) return [];
+
+  if (requestCandidateSlots.length > 0) {
+    const masterStampsById = new Map<string, CalendarEvent>();
+    for (const e of userEvents) {
+      if (e.isStamp && !e.originalStampId) masterStampsById.set(e.id, e);
+    }
+
+    for (const slot of requestCandidateSlots) {
+      for (const event of expandRecurringEvents(userEvents, slot.start, slot.end)) {
+        const availability = resolveAvailability(event, masterStampsById);
+        if (availability === 'free') continue;
+
+        const eventStart = event.start;
+        const eventEnd = event.end;
+        const overlaps = isBefore(eventStart, slot.end) && isAfter(eventEnd, slot.start);
+
+        if (overlaps) {
+          const actualStart = isBefore(eventStart, slot.start) ? slot.start : eventStart;
+          const actualEnd = isAfter(eventEnd, slot.end) ? slot.end : eventEnd;
+
+          if (isAfter(actualEnd, actualStart)) {
+            relevantEvents.push({
+              title: event.title,
+              start: actualStart,
+              end: actualEnd,
+              ...(availability === 'tentative' ? { tentative: true } : {}),
+            });
+          }
+        }
+      }
+    }
+
+    const uniqueEventsMap = new Map<string, ParticipantEventClient>();
+    relevantEvents.forEach(event => {
+      const key = `${event.title}_${event.start.toISOString()}_${event.end.toISOString()}`;
+      if (!uniqueEventsMap.has(key)) {
+        uniqueEventsMap.set(key, event);
+      }
+    });
+
+    return Array.from(uniqueEventsMap.values());
+  }
 
   let overallStart = requestDateRanges[0]?.start;
   let overallEnd = requestDateRanges[0]?.end;
@@ -168,6 +212,7 @@ export const findCommonAvailability = (
   const {
     dateRanges, 
     timeRanges,
+    candidateSlots,
     desiredDurationMinutes,
     desiredMarginMinutes,
     desiredMemberCount,
@@ -175,6 +220,28 @@ export const findCommonAvailability = (
   } = request;
 
   const participantIds = Object.keys(participants);
+
+  if (candidateSlots && candidateSlots.length > 0) {
+    for (const slot of candidateSlots) {
+      const availableParticipantsForSlot: string[] = [];
+      for (const pid of participantIds) {
+        const participant = participants[pid];
+        if (isParticipantFree(participant.events, slot.start, slot.end)) {
+          availableParticipantsForSlot.push(pid);
+        }
+      }
+
+      if (availableParticipantsForSlot.length >= desiredMemberCount) {
+        commonSlots.push({
+          start: new Date(slot.start),
+          end: new Date(slot.end),
+          availableParticipants: [...availableParticipantsForSlot],
+        });
+      }
+    }
+
+    return commonSlots.sort((a,b) => a.start.getTime() - b.start.getTime());
+  }
 
   for (const dr of dateRanges) { 
     let currentDay = startOfDay(dr.start); 
