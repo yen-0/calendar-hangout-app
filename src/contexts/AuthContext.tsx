@@ -1,69 +1,58 @@
 'use client';
 
-import { createContext, ReactNode, useCallback, useContext, useEffect, useReducer } from 'react';
-import { onAuthStateChanged, signInWithCustomToken, signOut as firebaseSignOut, User } from 'firebase/auth';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { onAuthStateChanged, signOut as firebaseSignOut, User } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase/config';
 import { useGuestMode } from './useGuestMode';
 import { upsertPublicUserProfile } from '@/lib/firebase/friendsService';
 
-const PUBLIC_SESSION_UID_PREFIX = 'public_';
+const PUBLIC_SESSION_STORAGE_KEY = 'tsudoi.publicSessionUid';
 
-export function isPublicSessionUser(user: User | null | undefined): boolean {
-  return !!user?.uid.startsWith(PUBLIC_SESSION_UID_PREFIX);
+export type AppUser = Pick<User, 'uid' | 'displayName' | 'email' | 'photoURL'> & {
+  isAnonymous: boolean;
+};
+
+export function isPublicSessionUser(user: AppUser | null | undefined): boolean {
+  return !!user?.isAnonymous && user.uid.startsWith('public_');
 }
 
-type AuthState =
-  | { status: 'loading'; user: null }
-  | { status: 'authenticated'; user: User }
-  | { status: 'signedOut'; user: null };
-
-type AuthAction =
-  | { type: 'firebaseUser'; user: User }
-  | { type: 'firebaseNoUser' }
-  | { type: 'signedOut' };
-
-const initialState: AuthState = { status: 'loading', user: null };
-
-function reducer(state: AuthState, action: AuthAction): AuthState {
-  switch (action.type) {
-    case 'firebaseUser':
-      return { status: 'authenticated', user: action.user };
-    case 'firebaseNoUser':
-      return { status: 'signedOut', user: null };
-    case 'signedOut':
-      return { status: 'signedOut', user: null };
-    default:
-      return state;
-  }
+function createPublicSessionUser(uid: string): AppUser {
+  return {
+    uid,
+    displayName: 'Public Organizer',
+    email: null,
+    photoURL: null,
+    isAnonymous: true,
+  };
 }
 
 interface AuthContextValue {
-  user: User | null;
+  user: AppUser | null;
   loading: boolean;
   isGuest: boolean;
   isPublicSession: boolean;
   signInAsGuest: () => Promise<void>;
-  ensurePublicSession: () => Promise<User>;
+  ensurePublicSession: () => Promise<AppUser>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [firebaseUser, setFirebaseUser] = useState<User | null | undefined>(undefined);
+  const [publicSessionUser, setPublicSessionUser] = useState<AppUser | null>(null);
   const { isGuest, setIsGuest } = useGuestMode();
   const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        // A real Firebase user supersedes guest mode. Anonymous users are
-        // allowed, but they stay on the public hangout path instead of the
-        // calendar guest path.
+        // A real Firebase user supersedes guest mode and public session mode.
         setIsGuest(false);
-        dispatch({ type: 'firebaseUser', user: firebaseUser });
-        if (!isPublicSessionUser(firebaseUser)) {
+        setFirebaseUser(firebaseUser);
+        setPublicSessionUser(null);
+        if (!firebaseUser.isAnonymous) {
           void upsertPublicUserProfile({
             uid: firebaseUser.uid,
             displayName: firebaseUser.displayName,
@@ -74,30 +63,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
         }
       } else {
-        dispatch({ type: 'firebaseNoUser' });
+        setFirebaseUser(null);
       }
     });
     return unsubscribe;
   }, [setIsGuest]);
 
-  const ensurePublicSession = useCallback(async (): Promise<User> => {
-    const currentUser = auth.currentUser;
-    if (currentUser) return currentUser;
-    const response = await fetch('/api/auth/public-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!response.ok) {
-      const errorBody = await response.text().catch(() => '');
-      throw new Error(errorBody || 'Failed to start public session.');
-    }
-    const payload = (await response.json()) as { token?: string };
-    if (!payload.token) {
-      throw new Error('Public session token missing from server response.');
-    }
-    const credential = await signInWithCustomToken(auth, payload.token);
-    return credential.user;
-  }, []);
+  const ensurePublicSession = useCallback(async (): Promise<AppUser> => {
+    if (publicSessionUser) return publicSessionUser;
+
+    const existingUid = window.localStorage.getItem(PUBLIC_SESSION_STORAGE_KEY);
+    const uid = existingUid && existingUid.startsWith('public_')
+      ? existingUid
+      : `public_${crypto.randomUUID().replace(/-/g, '').slice(0, 20)}`;
+
+    const nextUser = createPublicSessionUser(uid);
+    window.localStorage.setItem(PUBLIC_SESSION_STORAGE_KEY, uid);
+    setPublicSessionUser(nextUser);
+    return nextUser;
+  }, [publicSessionUser]);
 
   const signInAsGuest = useCallback(async () => {
     try {
@@ -107,12 +91,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Error clearing auth before guest mode:', message);
     }
     setIsGuest(true);
-    dispatch({ type: 'signedOut' });
     router.push('/calendar');
   }, [router, setIsGuest]);
 
   const signOut = useCallback(async () => {
-    const wasPublicSession = isPublicSessionUser(auth.currentUser);
+    const wasPublicSession = !!publicSessionUser;
     try {
       await firebaseSignOut(auth);
     } catch (err) {
@@ -121,15 +104,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw err instanceof Error ? err : new Error(message);
     }
     setIsGuest(false);
-    dispatch({ type: 'signedOut' });
+    if (wasPublicSession) {
+      window.localStorage.removeItem(PUBLIC_SESSION_STORAGE_KEY);
+      setPublicSessionUser(null);
+    }
     router.push(wasPublicSession ? '/' : '/sign-in');
-  }, [router, setIsGuest]);
+  }, [publicSessionUser, router, setIsGuest]);
+
+  const user = useMemo(() => publicSessionUser ?? (firebaseUser && !firebaseUser.isAnonymous
+    ? {
+        uid: firebaseUser.uid,
+        displayName: firebaseUser.displayName,
+        email: firebaseUser.email,
+        photoURL: firebaseUser.photoURL,
+        isAnonymous: false,
+      }
+    : firebaseUser
+      ? {
+          uid: firebaseUser.uid,
+          displayName: firebaseUser.displayName,
+          email: firebaseUser.email,
+          photoURL: firebaseUser.photoURL,
+          isAnonymous: true,
+        }
+      : null), [firebaseUser, publicSessionUser]);
 
   const value: AuthContextValue = {
-    user: state.user,
-    loading: state.status === 'loading',
+    user,
+    loading: firebaseUser === undefined,
     isGuest,
-    isPublicSession: isPublicSessionUser(state.user),
+    isPublicSession: !!publicSessionUser,
     signInAsGuest,
     ensurePublicSession,
     signOut,

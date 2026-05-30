@@ -1,11 +1,11 @@
 'use client';
 
-import { User } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
+import { AppUser } from '@/contexts/AuthContext';
 import { useLanguage } from '@/hooks/useLanguage';
 
 interface Props {
-  user: User | null;
+  user: AppUser | null;
   isGuest: boolean;
   isSimpleMode: boolean;
   onToggleMode: () => void;
@@ -34,4 +34,3 @@ export function CalendarPageHeader({ user, isGuest, isSimpleMode, onToggleMode, 
     </div>
   );
 }
-
