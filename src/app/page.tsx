@@ -7,21 +7,21 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/hooks/useLanguage';
 
 export default function HomePage() {
-  const { user, loading, isGuest, isPublicSession, signInAsGuest } = useAuth();
+  const { user, loading, isGuest, isPublicSession } = useAuth();
   const router = useRouter();
   const { t } = useLanguage();
 
   useEffect(() => {
     if (loading) return;
     if (isGuest) {
-      router.replace('/calendar');
+      router.replace('/tsudoi');
       return;
     }
     if (isPublicSession) {
-      router.replace('/hangouts');
+      router.replace('/tsudoi');
       return;
     }
-    if (user) router.replace('/calendar');
+    if (user) router.replace('/tsudoi');
   }, [isGuest, isPublicSession, loading, router, user]);
 
   if (loading || user || isGuest) {
@@ -67,18 +67,11 @@ export default function HomePage() {
               {t.home.ctaSignIn}
             </Link>
             <Link
-              href="/hangouts"
+              href="/tsudoi"
               className="w-full rounded-lg border border-indigo-200 bg-indigo-50 px-7 py-3 text-base font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-100 sm:w-auto"
             >
               {t.home.ctaPublic}
             </Link>
-            <button
-              type="button"
-              onClick={() => void signInAsGuest()}
-              className="w-full rounded-lg px-4 py-3 text-base font-medium text-gray-600 underline-offset-4 hover:text-indigo-700 hover:underline sm:w-auto"
-            >
-              {t.home.ctaGuest}
-            </button>
           </div>
           <p className="mt-6 text-xs text-gray-500">{t.home.noCredit}</p>
         </div>

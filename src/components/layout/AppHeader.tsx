@@ -27,11 +27,11 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onOpenNotifications, unreadNotifi
   const isSignedIn = !!user && !isPublicSession && !isGuest;
 
   const navItems = isPublicSession
-    ? [{ href: '/hangouts', label: t.nav.hangouts, icon: UserGroupIcon }]
+    ? [{ href: '/tsudoi', label: t.nav.hangouts, icon: UserGroupIcon }]
     : [
-        { href: '/calendar', label: t.nav.calendar, icon: CalendarDaysIcon },
-        { href: '/hangouts', label: t.nav.hangouts, icon: UserGroupIcon },
+        { href: '/tsudoi', label: t.nav.hangouts, icon: UserGroupIcon },
         { href: '/friends', label: t.nav.friends, icon: UsersIcon },
+        { href: '/calendar', label: t.nav.calendar, icon: CalendarDaysIcon },
         ...(isSignedIn ? [{ href: '/settings', label: t.nav.settings, icon: Cog6ToothIcon }] : []),
       ];
 
@@ -39,7 +39,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onOpenNotifications, unreadNotifi
     <header className="sticky top-0 z-40 bg-white shadow-sm">
       <nav className="container mx-auto flex items-center justify-between px-4 py-3">
         <Link
-          href={isSignedIn ? '/calendar' : isPublicSession ? '/hangouts' : '/'}
+          href={isSignedIn ? '/tsudoi' : isPublicSession ? '/tsudoi' : '/'}
           className="text-2xl font-bold text-blue-600 transition-colors hover:text-blue-700"
         >
           {t.appName}
@@ -53,7 +53,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onOpenNotifications, unreadNotifi
                 href={item.href}
                 className={`rounded-md px-3 py-2 text-sm font-medium transition-colors
                   ${
-                    pathname === item.href
+                    pathname === item.href || pathname.startsWith(`${item.href}/`)
                       ? 'bg-blue-100 text-blue-700'
                       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                   }`}

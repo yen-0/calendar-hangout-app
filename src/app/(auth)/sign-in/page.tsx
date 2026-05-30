@@ -6,7 +6,6 @@ import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 
 import { auth } from '@/lib/firebase/config';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/hooks/useLanguage';
 
 const GoogleIcon = () => (
@@ -21,7 +20,6 @@ export default function SignInPage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const { signInAsGuest } = useAuth();
   const { t } = useLanguage();
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -118,20 +116,6 @@ export default function SignInPage() {
           </Button>
         </div>
       </form>
-
-      <div className="my-6 flex items-center before:mt-0.5 before:flex-1 before:border-t before:border-neutral-300 after:mt-0.5 after:flex-1 after:border-t after:border-neutral-300">
-        <p className="mx-4 mb-0 text-center font-semibold dark:text-neutral-200">{t.auth.or}</p>
-      </div>
-      <div>
-        <Button
-          variant="outline"
-          className="w-full border-slate-300 text-slate-700 hover:bg-slate-50"
-          onClick={signInAsGuest}
-          disabled={isLoading || isGoogleLoading}
-        >
-          {t.auth.guest}
-        </Button>
-      </div>
 
       <p className="mt-8 text-center text-sm text-gray-600">
         {t.auth.notMember}{' '}

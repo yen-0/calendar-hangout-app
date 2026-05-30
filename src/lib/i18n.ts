@@ -503,7 +503,7 @@ export const translations = {
     },
     nav: {
       calendar: 'Calendar',
-      hangouts: 'Hangouts',
+      hangouts: 'Tsudoi',
       friends: 'Friends',
       settings: 'Settings',
       notifications: 'Notifications',
@@ -534,7 +534,7 @@ export const translations = {
         { emoji: '✅', title: 'Confirmed time writes itself back', body: 'Pick a time everyone agreed on and Tsudoi drops the confirmed event onto each connected Google Calendar automatically.' },
         { emoji: '🔗', title: 'Google Calendar bridge', body: 'Sign in with Google and Tsudoi pulls in your existing events as conflict data.' },
         { emoji: '🎯', title: 'Stamps are your shortcut', body: 'Reusable colored stamps for routines let you fill a whole week with one drag.' },
-        { emoji: '🗓️', title: 'Hangouts that find common slots', body: 'Share a window and let Tsudoi highlight intersections where everyone is free.' },
+        { emoji: '🗓️', title: 'Tsudoi polls that find common slots', body: 'Share candidate times and let everyone answer with circle, triangle, or cross.' },
         { emoji: '🚶', title: 'Tokyo travel buffers (beta)', body: 'Attach a location to events in Greater Tokyo and Tsudoi estimates the travel time between them.' },
       ],
       steps: [
@@ -565,7 +565,7 @@ export const translations = {
       languageDescription: 'Choose the language used across the app. Japanese is the default.',
       googleTitle: 'Google Calendar',
       googleDescription:
-        'Connect your Google Calendar so Tsudoi can show your events alongside the in-app calendar and write confirmed hangouts back to your calendar.',
+        'Connect your Google Calendar so Tsudoi can show your events alongside the in-app calendar and write confirmed Tsudoi events back to your calendar.',
       connected: 'Google Calendar connected.',
       error: 'Could not connect Google Calendar.',
       locationTitle: 'Location & travel buffers (beta)',

@@ -10,6 +10,8 @@ interface Props {
 export function HangoutDetailsCard({ request }: Props) {
   const participantCount = Object.keys(request.participants || {}).length;
   const candidateSlotCount = request.candidateSlots?.length ?? 0;
+  const memberTarget =
+    request.desiredMemberCount > 0 ? `${participantCount} / ${request.desiredMemberCount}` : `${participantCount}`;
 
   return (
     <>
@@ -59,7 +61,8 @@ export function HangoutDetailsCard({ request }: Props) {
             <span className="font-semibold text-slate-600">Margin:</span> {request.desiredMarginMinutes} min
           </p>
           <p>
-            <span className="font-semibold text-slate-600">Members:</span> {participantCount} / {request.desiredMemberCount} joined
+            <span className="font-semibold text-slate-600">Members:</span> {memberTarget} joined
+            {request.desiredMemberCount <= 0 ? ' (target not decided)' : ''}
           </p>
           <p className="md:col-span-3">
             <span className="font-semibold text-slate-600">Current Status:</span>{' '}

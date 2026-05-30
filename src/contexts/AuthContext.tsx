@@ -32,7 +32,6 @@ interface AuthContextValue {
   loading: boolean;
   isGuest: boolean;
   isPublicSession: boolean;
-  signInAsGuest: () => Promise<void>;
   ensurePublicSession: () => Promise<AppUser>;
   signOut: () => Promise<void>;
 }
@@ -83,16 +82,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return nextUser;
   }, [publicSessionUser]);
 
-  const signInAsGuest = useCallback(async () => {
-    try {
-      await firebaseSignOut(auth);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown sign-out error';
-      console.error('Error clearing auth before guest mode:', message);
-    }
-    setIsGuest(true);
-    router.push('/calendar');
-  }, [router, setIsGuest]);
+  useEffect(() => {
+    if (!isGuest || firebaseUser !== null) return;
+    setIsGuest(false);
+    void ensurePublicSession();
+  }, [ensurePublicSession, firebaseUser, isGuest, setIsGuest]);
 
   const signOut = useCallback(async () => {
     const wasPublicSession = !!publicSessionUser;
@@ -134,7 +128,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading: firebaseUser === undefined,
     isGuest,
     isPublicSession: !!publicSessionUser,
-    signInAsGuest,
     ensurePublicSession,
     signOut,
   };

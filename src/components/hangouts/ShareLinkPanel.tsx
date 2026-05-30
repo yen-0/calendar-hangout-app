@@ -12,7 +12,7 @@ interface Props {
 
 export function ShareLinkPanel({ requestId }: Props) {
   const link =
-    typeof window !== 'undefined' ? `${window.location.origin}/hangouts/reply/${requestId}` : '';
+    typeof window !== 'undefined' ? `${window.location.origin}/tsudoi/reply/${requestId}` : '';
   const { t } = useLanguage();
 
   const copy = useCallback(() => {

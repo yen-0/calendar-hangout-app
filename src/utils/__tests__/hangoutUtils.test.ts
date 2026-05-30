@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { findCommonAvailability, prepareCreatorEventsForRequest } from '../hangoutUtils';
+import {
+  candidateSlotKey,
+  deriveSlotResponsesFromEvents,
+  findCommonAvailability,
+  prepareCreatorEventsForRequest,
+} from '../hangoutUtils';
 import { HangoutRequestClientState } from '@/types/hangouts';
 import { CalendarEvent } from '@/types/events';
 
@@ -124,6 +129,133 @@ describe('findCommonAvailability', () => {
     );
     expect(slot).toBeDefined();
     expect(slot?.availableParticipants).toEqual(['b']);
+  });
+
+  it('ranks all-yes response slots above maybe response slots', () => {
+    const firstSlot = {
+      start: new Date('2026-05-20T10:00:00'),
+      end: new Date('2026-05-20T10:30:00'),
+    };
+    const secondSlot = {
+      start: new Date('2026-05-20T11:00:00'),
+      end: new Date('2026-05-20T11:30:00'),
+    };
+    const slots = findCommonAvailability(
+      makeRequest({
+        desiredMemberCount: 2,
+        candidateSlots: [firstSlot, secondSlot],
+        participants: {
+          a: {
+            uid: 'a',
+            displayName: 'A',
+            submittedAt: new Date(),
+            events: [],
+            slotResponses: {
+              [candidateSlotKey(firstSlot)]: 'maybe',
+              [candidateSlotKey(secondSlot)]: 'yes',
+            },
+          },
+          b: {
+            uid: 'b',
+            displayName: 'B',
+            submittedAt: new Date(),
+            events: [],
+            slotResponses: {
+              [candidateSlotKey(firstSlot)]: 'yes',
+              [candidateSlotKey(secondSlot)]: 'yes',
+            },
+          },
+        },
+      }),
+    );
+
+    expect(slots).toHaveLength(2);
+    expect(slots[0].yesCount).toBe(2);
+    expect(slots[0].maybeCount).toBe(0);
+    expect(slots[1].yesCount).toBe(1);
+    expect(slots[1].maybeCount).toBe(1);
+  });
+
+  it('accepts maybe responses with a penalty when desired member count is met', () => {
+    const candidateSlot = {
+      start: new Date('2026-05-20T10:00:00'),
+      end: new Date('2026-05-20T10:30:00'),
+    };
+    const slots = findCommonAvailability(
+      makeRequest({
+        desiredMemberCount: 2,
+        candidateSlots: [candidateSlot],
+        participants: {
+          a: {
+            uid: 'a',
+            displayName: 'A',
+            submittedAt: new Date(),
+            events: [],
+            slotResponses: {
+              [candidateSlotKey(candidateSlot)]: 'maybe',
+            },
+          },
+          b: {
+            uid: 'b',
+            displayName: 'B',
+            submittedAt: new Date(),
+            events: [],
+            slotResponses: {
+              [candidateSlotKey(candidateSlot)]: 'yes',
+            },
+          },
+        },
+      }),
+    );
+
+    expect(slots).toHaveLength(1);
+    expect(slots[0].availableParticipants.sort()).toEqual(['a', 'b']);
+    expect(slots[0].maybeParticipants).toEqual(['a']);
+  });
+
+  it('allows evaluation when desired member count is not decided', () => {
+    const candidateSlot = {
+      start: new Date('2026-05-20T10:00:00'),
+      end: new Date('2026-05-20T10:30:00'),
+    };
+    const slots = findCommonAvailability(
+      makeRequest({
+        desiredMemberCount: 0,
+        candidateSlots: [candidateSlot],
+        participants: {
+          a: {
+            uid: 'a',
+            displayName: 'A',
+            submittedAt: new Date(),
+            events: [],
+            slotResponses: {
+              [candidateSlotKey(candidateSlot)]: 'yes',
+            },
+          },
+        },
+      }),
+    );
+
+    expect(slots).toHaveLength(1);
+    expect(slots[0].yesCount).toBe(1);
+  });
+
+  it('prefills slot responses from busy calendar overlaps', () => {
+    const firstSlot = {
+      start: new Date('2026-05-20T10:00:00'),
+      end: new Date('2026-05-20T10:30:00'),
+    };
+    const secondSlot = {
+      start: new Date('2026-05-20T11:00:00'),
+      end: new Date('2026-05-20T11:30:00'),
+    };
+    const responses = deriveSlotResponsesFromEvents(
+      [firstSlot, secondSlot],
+      [{ title: 'Busy', start: new Date('2026-05-20T10:10:00'), end: new Date('2026-05-20T10:20:00') }],
+    );
+
+    expect(responses[candidateSlotKey(firstSlot)]).toBe('no');
+    expect(responses[candidateSlotKey(secondSlot)]).toBe('yes');
   });
 });
 

@@ -26,6 +26,8 @@ export function HangoutRequestCard({
   onCloseOrArchive,
 }: Props) {
   const participantCount = Object.keys(request.participants || {}).length;
+  const memberTarget =
+    request.desiredMemberCount > 0 ? `${participantCount} / ${request.desiredMemberCount}` : `${participantCount}`;
   const { t } = useLanguage();
   const showCreatorActions = isCreator && request.status !== 'closed';
   const allowEditDelete = request.status !== 'confirmed';
@@ -35,7 +37,7 @@ export function HangoutRequestCard({
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-lg font-semibold text-blue-700 hover:underline">
-            <Link href={`/hangouts/reply/${request.id}`}>{request.requestName}</Link>
+            <Link href={`/tsudoi/reply/${request.id}`}>{request.requestName}</Link>
           </h2>
           <p className="text-xs text-gray-500">
             {t.hangouts.created}: {format(request.createdAt, 'PPP')}
@@ -44,7 +46,8 @@ export function HangoutRequestCard({
             {t.hangouts.status}: <span className="font-medium capitalize">{request.status.replace(/_/g, ' ')}</span>
           </p>
           <p className="text-xs text-gray-500">
-            {t.hangouts.participants}: {participantCount} / {request.desiredMemberCount}
+            {t.hangouts.participants}: {memberTarget}
+            {request.desiredMemberCount <= 0 ? ' (not decided)' : ''}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => onCopyShareLink(request.id)}>

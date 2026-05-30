@@ -7,6 +7,7 @@ import {
   HangoutRequestClientState,
   CommonSlotClient,
   CandidateSlotClient,
+  SlotResponseStatus,
 } from '@/types/hangouts';
 import { expandRecurringEvents } from './eventUtils';
 
@@ -198,6 +199,71 @@ const isParticipantFree = (
   return true;
 };
 
+export function candidateSlotKey(slot: CandidateSlotClient): string {
+  return `${new Date(slot.start).toISOString()}_${new Date(slot.end).toISOString()}`;
+}
+
+export function deriveSlotResponsesFromEvents(
+  candidateSlots: CandidateSlotClient[],
+  participantEvents: ParticipantEventClient[],
+): Record<string, SlotResponseStatus> {
+  return Object.fromEntries(
+    candidateSlots.map((slot) => [
+      candidateSlotKey(slot),
+      isParticipantFree(participantEvents, slot.start, slot.end) ? 'yes' : 'no',
+    ]),
+  );
+}
+
+function scoreCandidateSlotFromResponses(
+  slot: CandidateSlotClient,
+  participantIds: string[],
+  participants: HangoutRequestClientState['participants'],
+  desiredMemberCount: number,
+): CommonSlotClient | null {
+  const yesParticipants: string[] = [];
+  const maybeParticipants: string[] = [];
+  const unavailableParticipants: string[] = [];
+  const key = candidateSlotKey(slot);
+  let hasExplicitResponse = false;
+
+  for (const pid of participantIds) {
+    const participant = participants[pid];
+    const response = participant.slotResponses?.[key];
+    if (response) hasExplicitResponse = true;
+
+    if (response === 'yes') {
+      yesParticipants.push(pid);
+    } else if (response === 'maybe') {
+      maybeParticipants.push(pid);
+    } else if (response === 'no') {
+      unavailableParticipants.push(pid);
+    } else if (isParticipantFree(participant.events, slot.start, slot.end)) {
+      yesParticipants.push(pid);
+    } else {
+      unavailableParticipants.push(pid);
+    }
+  }
+
+  if (!hasExplicitResponse) return null;
+
+  const minimumViableCount = desiredMemberCount > 0 ? desiredMemberCount : 1;
+  const viableCount = yesParticipants.length + maybeParticipants.length;
+  if (viableCount < minimumViableCount) return null;
+
+  return {
+    start: new Date(slot.start),
+    end: new Date(slot.end),
+    availableParticipants: [...yesParticipants, ...maybeParticipants],
+    maybeParticipants,
+    unavailableParticipants,
+    yesCount: yesParticipants.length,
+    maybeCount: maybeParticipants.length,
+    noCount: unavailableParticipants.length,
+    score: yesParticipants.length * 100 - maybeParticipants.length * 10 - unavailableParticipants.length,
+  };
+}
+
 
 export const findCommonAvailability = (
   request: HangoutRequestClientState, 
@@ -220,8 +286,27 @@ export const findCommonAvailability = (
   } = request;
 
   const participantIds = Object.keys(participants);
+  const minimumViableCount = desiredMemberCount > 0 ? desiredMemberCount : 1;
 
   if (candidateSlots && candidateSlots.length > 0) {
+    const responseScoredSlots = candidateSlots
+      .map((slot) =>
+        scoreCandidateSlotFromResponses(slot, participantIds, participants, minimumViableCount),
+      )
+      .filter((slot): slot is CommonSlotClient => !!slot);
+
+    if (responseScoredSlots.length > 0) {
+      return responseScoredSlots.sort((a, b) => {
+        const scoreDelta = (b.score ?? 0) - (a.score ?? 0);
+        if (scoreDelta !== 0) return scoreDelta;
+        const yesDelta = (b.yesCount ?? 0) - (a.yesCount ?? 0);
+        if (yesDelta !== 0) return yesDelta;
+        const maybeDelta = (a.maybeCount ?? 0) - (b.maybeCount ?? 0);
+        if (maybeDelta !== 0) return maybeDelta;
+        return a.start.getTime() - b.start.getTime();
+      });
+    }
+
     for (const slot of candidateSlots) {
       const availableParticipantsForSlot: string[] = [];
       for (const pid of participantIds) {
@@ -231,7 +316,7 @@ export const findCommonAvailability = (
         }
       }
 
-      if (availableParticipantsForSlot.length >= desiredMemberCount) {
+      if (availableParticipantsForSlot.length >= minimumViableCount) {
         commonSlots.push({
           start: new Date(slot.start),
           end: new Date(slot.end),
@@ -276,7 +361,7 @@ export const findCommonAvailability = (
             }
           }
 
-          if (availableParticipantsForSlot.length >= desiredMemberCount) {
+          if (availableParticipantsForSlot.length >= minimumViableCount) {
             commonSlots.push({
               start: new Date(actualMeetingStart), 
               end: new Date(actualMeetingEnd),     

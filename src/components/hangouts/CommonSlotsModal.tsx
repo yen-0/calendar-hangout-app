@@ -73,7 +73,10 @@ export function CommonSlotsModal({
       await rankMutation.mutateAsync({
         hangoutName: request.requestName,
         durationMinutes: request.desiredDurationMinutes,
-        memberCount: request.desiredMemberCount,
+        memberCount:
+          request.desiredMemberCount > 0
+            ? request.desiredMemberCount
+            : Object.keys(participants).length,
         slots: slots.map((s) => ({
           startISO: s.start.toISOString(),
           endISO: s.end.toISOString(),
@@ -139,10 +142,22 @@ export function CommonSlotsModal({
                     <span>{rankInfo.rationale}</span>
                   </p>
                 )}
+                <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
+                  <div className="rounded-md bg-emerald-100 px-2 py-1 text-emerald-800">
+                    ○ {slot.yesCount ?? slot.availableParticipants.length} yes
+                  </div>
+                  <div className="rounded-md bg-amber-100 px-2 py-1 text-amber-800">
+                    △ {slot.maybeCount ?? 0} maybe
+                  </div>
+                  <div className="rounded-md bg-rose-100 px-2 py-1 text-rose-800">
+                    × {slot.noCount ?? 0} no
+                  </div>
+                </div>
                 {slot.availableParticipants && slot.availableParticipants.length > 0 && (
                   <div className="mt-2">
                     <p className="text-xs font-medium text-slate-600">
-                      {text.available} ({slot.availableParticipants.length} / {request.desiredMemberCount}):
+                      {text.available} ({slot.availableParticipants.length}
+                      {request.desiredMemberCount > 0 ? ` / ${request.desiredMemberCount}` : ''}):
                     </p>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {slot.availableParticipants.map((pid) => (

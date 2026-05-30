@@ -196,7 +196,7 @@ const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, onClose
                 {notif.type === 'hangout_invitation' && notif.confirmedSlotStart && (
                   <div className="mt-2 border-t border-gray-200 pt-2">
                     <div className="flex items-center justify-between">
-                      <Link href={`/hangouts/reply/${notif.hangoutRequestId}`} className="text-xs text-blue-600 hover:underline" onClick={onClose}>
+                      <Link href={`/tsudoi/reply/${notif.hangoutRequestId}`} className="text-xs text-blue-600 hover:underline" onClick={onClose}>
                         {t.notifications.confirmedHangout}
                       </Link>
                       <Button

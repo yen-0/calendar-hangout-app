@@ -1,14 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import {
-  addDays,
-  addMinutes,
-  endOfDay,
-  format,
-  parseISO,
-  startOfDay,
-} from 'date-fns';
+import { addDays, addWeeks, addMinutes, endOfDay, format, startOfDay } from 'date-fns';
+import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,12 +25,16 @@ function toDateInputValue(date: Date): string {
   return format(date, 'yyyy-MM-dd');
 }
 
-function fromDateInputValue(value: string): Date {
-  return value ? parseISO(`${value}T00:00:00`) : startOfDay(new Date());
+function slotKey(date: Date, rowIndex: number) {
+  return `${format(startOfDay(date), 'yyyy-MM-dd')}|${rowIndex}`;
 }
 
-function slotKey(dayIndex: number, rowIndex: number) {
-  return `${dayIndex}-${rowIndex}`;
+function parseSlotKey(key: string) {
+  const [dateKey, rowIndexString] = key.split('|');
+  return {
+    date: parseISO(`${dateKey}T00:00:00`),
+    rowIndex: Number(rowIndexString),
+  };
 }
 
 export function TsudoiRequestEditor({
@@ -55,18 +53,17 @@ export function TsudoiRequestEditor({
     initialData?.candidateSlotMinutes ?? DEFAULT_CELL_MINUTES,
   );
   const [desiredMemberCount, setDesiredMemberCount] = useState(
-    initialData?.desiredMemberCount ?? 2,
+    initialData?.desiredMemberCount && initialData.desiredMemberCount > 0
+      ? String(initialData.desiredMemberCount)
+      : '',
   );
   const [selectedCells, setSelectedCells] = useState<Set<string>>(() => {
     const next = new Set<string>();
     for (const slot of initialData?.candidateSlots ?? []) {
-      const dayOffset = Math.floor((startOfDay(slot.start).getTime() - startOfDay(initialData?.weekStartDate ?? new Date()).getTime()) / (24 * 60 * 60 * 1000));
       const minutesFromMidnight =
         slot.start.getHours() * 60 + slot.start.getMinutes();
       const rowIndex = Math.floor(minutesFromMidnight / (initialData?.candidateSlotMinutes ?? DEFAULT_CELL_MINUTES));
-      if (dayOffset >= 0 && dayOffset < 7) {
-        next.add(slotKey(dayOffset, rowIndex));
-      }
+      next.add(slotKey(slot.start, rowIndex));
     }
     return next;
   });
@@ -85,23 +82,25 @@ export function TsudoiRequestEditor({
     [weekStartDate],
   );
 
+  const moveWeek = (weeks: number) => {
+    setWeekStartDate((current) => getWeekStart(addWeeks(current, weeks)));
+  };
+
   const previewSlots = useMemo(() => {
     const slots: CandidateSlotClient[] = [];
     for (const cell of selectedCells) {
-      const [dayIndexString, rowIndexString] = cell.split('-');
-      const dayIndex = Number(dayIndexString);
-      const rowIndex = Number(rowIndexString);
-      const start = addMinutes(addDays(startOfDay(weekStartDate), dayIndex), rowIndex * cellMinutes);
+      const { date, rowIndex } = parseSlotKey(cell);
+      const start = addMinutes(startOfDay(date), rowIndex * cellMinutes);
       slots.push({
         start,
         end: addMinutes(start, cellMinutes),
       });
     }
     return slots.sort((a, b) => a.start.getTime() - b.start.getTime());
-  }, [cellMinutes, selectedCells, weekStartDate]);
+  }, [cellMinutes, selectedCells]);
 
   const toggleCell = (dayIndex: number, rowIndex: number) => {
-    const key = slotKey(dayIndex, rowIndex);
+    const key = slotKey(addDays(startOfDay(weekStartDate), dayIndex), rowIndex);
     setSelectedCells((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -131,7 +130,7 @@ export function TsudoiRequestEditor({
       requestName,
       desiredDurationMinutes: cellMinutes,
       desiredMarginMinutes: 0,
-      desiredMemberCount,
+      desiredMemberCount: desiredMemberCount ? Number(desiredMemberCount) : 0,
       dateRanges: [{ start: requestDateRangeStart, end: requestDateRangeEnd }],
       timeRanges: [{ start: '00:00', end: '24:00' }],
       candidateSlotMinutes: cellMinutes,
@@ -155,12 +154,33 @@ export function TsudoiRequestEditor({
         </div>
         <div className="space-y-2">
           <Label htmlFor="weekStartDate">Week start</Label>
-          <Input
-            id="weekStartDate"
-            type="date"
-            value={toDateInputValue(weekStartDate)}
-            onChange={(event) => setWeekStartDate(fromDateInputValue(event.target.value))}
-          />
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => moveWeek(-1)}
+              aria-label="Previous week"
+            >
+              <ChevronLeftIcon className="h-4 w-4" />
+            </Button>
+            <Input
+              id="weekStartDate"
+              type="date"
+              value={toDateInputValue(weekStartDate)}
+              onChange={(event) => setWeekStartDate(startOfDay(new Date(`${event.target.value}T00:00:00`)))}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => moveWeek(1)}
+              aria-label="Next week"
+            >
+              <ChevronRightIcon className="h-4 w-4" />
+            </Button>
+          </div>
+          <p className="text-xs text-slate-500">Viewing week of {format(weekStartDate, 'MMM d, yyyy')}</p>
         </div>
       </div>
 
@@ -185,11 +205,14 @@ export function TsudoiRequestEditor({
           <Input
             id="desiredMemberCount"
             type="number"
-            min="2"
+            min="1"
             value={desiredMemberCount}
-            onChange={(event) => setDesiredMemberCount(Number(event.target.value))}
-            required
+            onChange={(event) => setDesiredMemberCount(event.target.value)}
+            placeholder="Not decided"
           />
+          <p className="text-xs text-slate-500">
+            Leave blank if you want to evaluate the best date after everyone answers.
+          </p>
         </div>
       </div>
 
@@ -243,9 +266,10 @@ export function TsudoiRequestEditor({
                         aria-pressed={isSelected}
                         onClick={() => toggleCell(day.index, rowIndex)}
                         className={[
-                          'min-h-[32px] bg-white transition',
-                          'hover:bg-sky-50',
-                          isSelected ? 'bg-sky-500 text-white hover:bg-sky-600' : '',
+                          'min-h-[32px] border border-transparent transition',
+                          isSelected
+                            ? 'bg-sky-500 text-white ring-2 ring-inset ring-sky-600 hover:bg-sky-600'
+                            : 'bg-white hover:bg-sky-50',
                         ].join(' ')}
                       >
                         <span className="sr-only">
@@ -260,21 +284,6 @@ export function TsudoiRequestEditor({
             })}
           </div>
         </div>
-      </div>
-
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-        <p className="mb-2 text-sm font-semibold text-slate-700">Selected candidates</p>
-        {previewSlots.length === 0 ? (
-          <p className="text-sm text-slate-500">No cells selected yet.</p>
-        ) : (
-          <ul className="grid gap-2 text-sm text-slate-600 md:grid-cols-2">
-            {previewSlots.slice(0, 12).map((slot) => (
-              <li key={slot.start.toISOString()} className="rounded-lg bg-slate-50 px-3 py-2">
-                {format(slot.start, 'EEE MMM d, HH:mm')} - {format(slot.end, 'HH:mm')}
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
 
       <div className="flex flex-col-reverse gap-3 border-t pt-4 md:flex-row md:justify-end">

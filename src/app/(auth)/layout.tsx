@@ -13,15 +13,15 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (loading) return;
     if (isGuest) {
-      router.replace('/calendar');
+      router.replace('/tsudoi');
       return;
     }
     if (isPublicSession) {
-      router.replace('/hangouts');
+      router.replace('/tsudoi');
       return;
     }
     if (user) {
-      router.replace('/calendar');
+      router.replace('/tsudoi');
     }
   }, [isGuest, isPublicSession, loading, router, user]);
 

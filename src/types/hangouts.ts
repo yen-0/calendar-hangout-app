@@ -34,12 +34,20 @@ export interface CandidateSlotClient {
   end: Date;
 }
 
+export type SlotResponseStatus = 'yes' | 'maybe' | 'no';
+
+export interface SlotResponseClient {
+  slotKey: string;
+  status: SlotResponseStatus;
+}
+
 // For participant's submitted data (client-side)
 export interface ParticipantDataClient {
   uid: string;
   displayName: string;
   submittedAt: Date; // JS Date
   events: ParticipantEventClient[];
+  slotResponses?: Record<string, SlotResponseStatus>;
 }
 
 // For common slots found by calculation (client-side)
@@ -47,6 +55,12 @@ export interface CommonSlotClient {
   start: Date;
   end: Date;
   availableParticipants: string[];
+  maybeParticipants?: string[];
+  unavailableParticipants?: string[];
+  yesCount?: number;
+  maybeCount?: number;
+  noCount?: number;
+  score?: number;
 }
 
 // For the final chosen slot (client-side)
@@ -79,12 +93,19 @@ export interface ParticipantDataFirestore {
   displayName: string;
   submittedAt: Timestamp;
   events: ParticipantEventFirestore[];
+  slotResponses?: Record<string, SlotResponseStatus>;
 }
 
 export interface CommonSlotFirestore {
   start: Timestamp;
   end: Timestamp;
   availableParticipants: string[];
+  maybeParticipants?: string[];
+  unavailableParticipants?: string[];
+  yesCount?: number;
+  maybeCount?: number;
+  noCount?: number;
+  score?: number;
 }
 
 export interface FinalSelectedSlotFirestore {

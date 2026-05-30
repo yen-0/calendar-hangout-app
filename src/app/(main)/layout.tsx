@@ -53,13 +53,14 @@ export default function MainAppLayout({
 
   useEffect(() => {
     if (!isPublicSession) return;
-    const isHangoutRoute = pathname.startsWith('/hangouts');
-    if (!isHangoutRoute) {
-      router.replace('/hangouts');
+    const isTsudoiRoute = pathname.startsWith('/tsudoi') || pathname.startsWith('/hangouts');
+    if (!isTsudoiRoute) {
+      router.replace('/tsudoi');
     }
   }, [isPublicSession, pathname, router]);
 
-  const isPublicHangoutRoute = !isPublicSession || pathname.startsWith('/hangouts');
+  const isPublicHangoutRoute =
+    !isPublicSession || pathname.startsWith('/tsudoi') || pathname.startsWith('/hangouts');
 
   return (
     <div className="flex flex-col min-h-screen">

@@ -179,7 +179,7 @@ export default function FriendsPage() {
   );
 
   const handleInviteToHangout = useCallback((profile: PublicUserProfileClient) => {
-    router.push(`/hangouts/request?recipient=${encodeURIComponent(profile.uid)}`);
+    router.push(`/tsudoi/request?recipient=${encodeURIComponent(profile.uid)}`);
   }, [router]);
 
   if (authLoading || isLoading) {

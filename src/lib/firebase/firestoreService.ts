@@ -33,6 +33,7 @@ import {
   DateRangeFirestore,
   CandidateSlotFirestore,
   CommonSlotFirestore,
+  SlotResponseStatus,
 } from '@/types/hangouts';
 import { PackedStamp, StampPackClient, StampPackFirestore } from '@/types/stampPacks';
 import { nanoid } from 'nanoid';
@@ -217,6 +218,7 @@ const hangoutRequestFromFirestore = (docSnap: DocumentSnapshot<DocumentData>): H
                 start: ev.start.toDate(),
                 end: ev.end.toDate(),
               })),
+              slotResponses: pData.slotResponses,
             };
           }
         );
@@ -227,6 +229,12 @@ const hangoutRequestFromFirestore = (docSnap: DocumentSnapshot<DocumentData>): H
           start: s.start.toDate(),
           end: s.end.toDate(),
           availableParticipants: s.availableParticipants,
+          maybeParticipants: s.maybeParticipants,
+          unavailableParticipants: s.unavailableParticipants,
+          yesCount: s.yesCount,
+          maybeCount: s.maybeCount,
+          noCount: s.noCount,
+          score: s.score,
         }));
 
       const candidateSlotsClient: CandidateSlotClient[] | undefined =
@@ -276,6 +284,13 @@ export const createHangoutRequest = async (
     const newRequestRef = doc(collection(db, HANGOUT_REQUESTS_COLLECTION));
     const normalizedRecipients = Array.from(new Set(recipientUids.filter((uid) => uid && uid !== creatorUid)));
 
+    const creatorSlotResponses: Record<string, SlotResponseStatus> = Object.fromEntries(
+      (formData.candidateSlots ?? []).map((slot) => [
+        `${new Date(slot.start).toISOString()}_${new Date(slot.end).toISOString()}`,
+        'yes',
+      ]),
+    );
+
     const creatorParticipantDataFirestore: ParticipantDataFirestore = {
       uid: creatorUid,
       displayName: creatorName,
@@ -285,6 +300,9 @@ export const createHangoutRequest = async (
         start: Timestamp.fromDate(new Date(event.start)), // Convert client date to Timestamp
         end: Timestamp.fromDate(new Date(event.end)),     // Convert client date to Timestamp
       })),
+      ...(Object.keys(creatorSlotResponses).length > 0
+        ? { slotResponses: creatorSlotResponses }
+        : {}),
     };
 
     const newRequestData: Omit<HangoutRequest, 'id' | 'commonAvailabilitySlots' | 'finalSelectedSlot'> = { // Exclude optional fields not set on create
@@ -325,7 +343,7 @@ export const createHangoutRequest = async (
           createdAt: Timestamp.now(),
           message: `${creatorName} invited you to "${formData.requestName}".`,
           participantUid,
-          relatedUrl: `/hangouts/reply/${newRequestRef.id}`,
+          relatedUrl: `/tsudoi/reply/${newRequestRef.id}`,
         });
       }
       await batch.commit();
@@ -394,6 +412,7 @@ export const addParticipantToHangoutRequest = async (
         start: Timestamp.fromDate(new Date(event.start)), // Convert client date
         end: Timestamp.fromDate(new Date(event.end)),     // Convert client date
       })),
+      ...(participantData.slotResponses ? { slotResponses: participantData.slotResponses } : {}),
     };
 
     await updateDoc(requestDocRef, {
