@@ -2,6 +2,7 @@
 
 import { format } from 'date-fns';
 import { HangoutRequestClientState } from '@/types/hangouts';
+import { getHangoutStatusLabel } from '@/utils/hangoutUtils';
 
 interface Props {
   request: HangoutRequestClientState;
@@ -12,6 +13,7 @@ export function HangoutDetailsCard({ request }: Props) {
   const candidateSlotCount = request.candidateSlots?.length ?? 0;
   const memberTarget =
     request.desiredMemberCount > 0 ? `${participantCount} / ${request.desiredMemberCount}` : `${participantCount}`;
+  const statusLabel = getHangoutStatusLabel(request.status);
 
   return (
     <>
@@ -66,7 +68,7 @@ export function HangoutDetailsCard({ request }: Props) {
           </p>
           <p className="md:col-span-3">
             <span className="font-semibold text-slate-600">Current Status:</span>{' '}
-            <span className="font-medium capitalize text-blue-600">{request.status.replace(/_/g, ' ')}</span>
+            <span className="font-medium text-blue-600">{statusLabel}</span>
           </p>
         </div>
       </section>

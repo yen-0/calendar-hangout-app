@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { CommonSlotClient, HangoutRequestClientState, ParticipantDataClient } from '@/types/hangouts';
 import { useRankSlots, RankedSlot } from '@/lib/queries/aiRanking';
 import { useLanguage } from '@/hooks/useLanguage';
+import { getSlotAttendanceBreakdown } from '@/utils/hangoutUtils';
 
 interface Props {
   isOpen: boolean;
@@ -45,18 +46,30 @@ export function CommonSlotsModal({
   const text =
     language === 'ja'
       ? {
-          rankHint: rankMutation.data ? '上位の候補を下にハイライトしています。' : 'どの候補を選ぶとよいかを順位付きで提案します。',
-          rankButton: rankMutation.data ? '再ランキング' : '候補を順位付け',
+          rankHint: rankMutation.data
+            ? '候補の並び替え結果を下にハイライトしています。'
+            : 'どの候補を選ぶべきか、順位付けの提案を取得できます。',
+          rankButton: rankMutation.data ? '再ランク' : '候補を順位付け',
           noCommonSlots: '共通の候補はありません。',
           available: '参加可能',
-          selected: '確定対象として選択済み',
+          selected: '確認対象として選択済み',
+          attendanceBreakdown: '参加状況',
+          canAttend: '参加可',
+          maybe: '未定',
+          cannotAttend: '参加不可',
         }
       : {
-          rankHint: rankMutation.data ? 'Top-ranked slots are highlighted below.' : 'Get ranking suggestions for which slot to pick.',
+          rankHint: rankMutation.data
+            ? 'Top-ranked slots are highlighted below.'
+            : 'Get ranking suggestions for which slot to pick.',
           rankButton: rankMutation.data ? 'Re-rank' : 'Rank slots',
           noCommonSlots: 'No common slots available.',
           available: 'Available',
           selected: 'Selected for Confirmation',
+          attendanceBreakdown: 'Attendance breakdown',
+          canAttend: 'Can attend',
+          maybe: 'Maybe',
+          cannotAttend: 'Cannot attend',
         };
 
   const rankByIndex = useMemo(() => {
@@ -74,9 +87,7 @@ export function CommonSlotsModal({
         hangoutName: request.requestName,
         durationMinutes: request.desiredDurationMinutes,
         memberCount:
-          request.desiredMemberCount > 0
-            ? request.desiredMemberCount
-            : Object.keys(participants).length,
+          request.desiredMemberCount > 0 ? request.desiredMemberCount : Object.keys(participants).length,
         slots: slots.map((s) => ({
           startISO: s.start.toISOString(),
           endISO: s.end.toISOString(),
@@ -89,19 +100,34 @@ export function CommonSlotsModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`${request.requestName} - ${t.calendar.confirmSelectedSlot}`} size="lg">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`${request.requestName} - ${t.calendar.confirmSelectedSlot}`}
+      size="lg"
+    >
       {isCreator && slots.length > 1 && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
           <div className="flex items-center gap-2 text-sm text-amber-900">
             <SparklesIcon className="h-4 w-4" />
             <span>{text.rankHint}</span>
           </div>
-          <Button size="sm" variant="outline" onClick={handleRankSlots} isLoading={rankMutation.isPending} disabled={rankMutation.isPending}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleRankSlots}
+            isLoading={rankMutation.isPending}
+            disabled={rankMutation.isPending}
+          >
             {text.rankButton}
           </Button>
         </div>
       )}
-      {rankError && <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">{rankError}</div>}
+      {rankError && (
+        <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+          {rankError}
+        </div>
+      )}
 
       <div className="max-h-[60vh] space-y-3 overflow-y-auto p-1">
         {slots.length === 0 ? (
@@ -112,6 +138,8 @@ export function CommonSlotsModal({
           slots.map((slot, index) => {
             const isSelected = selectedIndex === index;
             const rankInfo = rankByIndex.get(index);
+            const breakdown = getSlotAttendanceBreakdown(slot, participants);
+
             return (
               <div
                 key={index}
@@ -126,7 +154,9 @@ export function CommonSlotsModal({
               >
                 {rankInfo && (
                   <span
-                    className={`absolute -top-2 -left-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white shadow ${RANK_BADGE_COLORS[rankInfo.rank - 1] ?? 'bg-amber-300'}`}
+                    className={`absolute -top-2 -left-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white shadow ${
+                      RANK_BADGE_COLORS[rankInfo.rank - 1] ?? 'bg-amber-300'
+                    }`}
                     title={`Rank #${rankInfo.rank}`}
                   >
                     #{rankInfo.rank}
@@ -144,13 +174,13 @@ export function CommonSlotsModal({
                 )}
                 <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
                   <div className="rounded-md bg-emerald-100 px-2 py-1 text-emerald-800">
-                    ○ {slot.yesCount ?? slot.availableParticipants.length} yes
+                    Yes {slot.yesCount ?? breakdown.yesCount}
                   </div>
                   <div className="rounded-md bg-amber-100 px-2 py-1 text-amber-800">
-                    △ {slot.maybeCount ?? 0} maybe
+                    Maybe {slot.maybeCount ?? breakdown.maybeCount}
                   </div>
                   <div className="rounded-md bg-rose-100 px-2 py-1 text-rose-800">
-                    × {slot.noCount ?? 0} no
+                    No {slot.noCount ?? breakdown.noCount}
                   </div>
                 </div>
                 {slot.availableParticipants && slot.availableParticipants.length > 0 && (
@@ -168,6 +198,48 @@ export function CommonSlotsModal({
                     </div>
                   </div>
                 )}
+                <div className="mt-3 rounded-lg border border-slate-200 bg-white/70 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {text.attendanceBreakdown}
+                  </p>
+                  <div className="mt-2 grid gap-2 md:grid-cols-3">
+                    {[
+                      {
+                        label: text.canAttend,
+                        tone: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+                        items: breakdown.yesParticipants,
+                      },
+                      {
+                        label: text.maybe,
+                        tone: 'border-amber-200 bg-amber-50 text-amber-900',
+                        items: breakdown.maybeParticipants,
+                      },
+                      {
+                        label: text.cannotAttend,
+                        tone: 'border-rose-200 bg-rose-50 text-rose-900',
+                        items: breakdown.noParticipants,
+                      },
+                    ].map((group) => (
+                      <div key={group.label} className={`rounded-md border px-2 py-2 ${group.tone}`}>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide">{group.label}</p>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {group.items.length > 0 ? (
+                            group.items.map((participant) => (
+                              <span
+                                key={participant.uid}
+                                className="rounded-full bg-white/80 px-1.5 py-0.5 text-[11px] font-medium"
+                              >
+                                {participant.displayName}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-[11px] opacity-70">None</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 {isSelected && allowSelection && (
                   <div className="mt-3 text-center">
                     <CheckCircleIcon className="mr-1 inline-block h-6 w-6 text-blue-600" />
@@ -184,7 +256,11 @@ export function CommonSlotsModal({
           {t.common.close}
         </Button>
         {isCreator && slots.length > 0 && (
-          <Button onClick={onConfirm} disabled={isConfirming || selectedIndex === null} className="bg-green-600 text-white hover:bg-green-700">
+          <Button
+            onClick={onConfirm}
+            disabled={isConfirming || selectedIndex === null}
+            className="bg-green-600 text-white hover:bg-green-700"
+          >
             {t.calendar.confirmSelectedSlot}
           </Button>
         )}

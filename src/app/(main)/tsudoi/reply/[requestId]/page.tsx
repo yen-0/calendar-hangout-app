@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { format } from 'date-fns';
-import { Timestamp, collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { Timestamp, collection, doc, writeBatch } from 'firebase/firestore';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +30,7 @@ import {
 import {
   deriveSlotResponsesFromEvents,
   findCommonAvailability,
+  getSlotAttendanceBreakdown,
   prepareCreatorEventsForRequest,
 } from '@/utils/hangoutUtils';
 import { showErrorToast, showInfoToast, showSuccessToast } from '@/lib/toasts';
@@ -48,8 +49,6 @@ export default function ReplyToHangoutRequestPage() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [isSubmittingAvailability, setIsSubmittingAvailability] = useState(false);
   const [hasUserAlreadySubmitted, setHasUserAlreadySubmitted] = useState(false);
-  const [isCalculatingSlots, setIsCalculatingSlots] = useState(false);
-  const [commonSlots, setCommonSlots] = useState<CommonSlotClient[]>([]);
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
   const [selectedFinalSlotIndex, setSelectedFinalSlotIndex] = useState<number | null>(null);
   const [isConfirmingSlot, setIsConfirmingSlot] = useState(false);
@@ -60,6 +59,11 @@ export default function ReplyToHangoutRequestPage() {
   const currentParticipant = useMemo(
     () => (user && request ? request.participants?.[user.uid] ?? null : null),
     [request, user],
+  );
+
+  const liveCommonSlots = useMemo(
+    () => (request ? findCommonAvailability(request, 15) : []),
+    [request],
   );
 
   useEffect(() => {
@@ -93,11 +97,6 @@ export default function ReplyToHangoutRequestPage() {
         setPublicDisplayName(fetched.participants[user.uid].displayName ?? '');
       } else {
         setHasUserAlreadySubmitted(false);
-      }
-      if (fetched.status === 'results_ready' && fetched.commonAvailabilitySlots) {
-        setCommonSlots(fetched.commonAvailabilitySlots);
-      } else {
-        setCommonSlots([]);
       }
     } catch (err) {
       console.error('Failed to load hangout request:', err);
@@ -152,14 +151,10 @@ export default function ReplyToHangoutRequestPage() {
       setHasUserAlreadySubmitted(true);
       setRequest((prev) => {
         if (!prev) return null;
-        const updatedParticipants = { ...prev.participants, [participant.uid]: participant };
-        const newStatus =
-          prev.status === 'pending' &&
-          prev.desiredMemberCount > 0 &&
-          Object.keys(updatedParticipants).length >= prev.desiredMemberCount
-            ? 'pending_calculation'
-            : prev.status;
-        return { ...prev, participants: updatedParticipants, status: newStatus };
+        return {
+          ...prev,
+          participants: { ...prev.participants, [participant.uid]: participant },
+        };
       });
     },
     [],
@@ -235,58 +230,8 @@ export default function ReplyToHangoutRequestPage() {
     [isPublicSession, publicDisplayName, request, slotResponses, syncLocalParticipant, t, user],
   );
 
-  const handleCalculateCommonTimes = useCallback(async () => {
-    if (!request) {
-      showErrorToast(t.replyPage.requestDataNotLoaded);
-      return;
-    }
-    const submittedCount = Object.keys(request.participants || {}).length;
-    if (submittedCount === 0) {
-      showInfoToast(t.replyPage.noParticipantsYet);
-      return;
-    }
-    if (request.desiredMemberCount > 0 && submittedCount < request.desiredMemberCount) {
-      showInfoToast(t.replyPage.waitingForParticipants(request.desiredMemberCount, submittedCount));
-    }
-    setIsCalculatingSlots(true);
-    setCommonSlots([]);
-    await new Promise((r) => setTimeout(r, 50));
-    try {
-      const slots = findCommonAvailability(request, 15);
-      setCommonSlots(slots);
-      const newStatus = slots.length > 0 ? 'results_ready' : 'no_slots_found';
-      const requestDocRef = doc(db, 'hangoutRequests', request.id);
-      await updateDoc(requestDocRef, {
-        commonAvailabilitySlots: slots.map((s) => ({
-          start: Timestamp.fromDate(s.start),
-          end: Timestamp.fromDate(s.end),
-          availableParticipants: s.availableParticipants,
-          ...(s.maybeParticipants ? { maybeParticipants: s.maybeParticipants } : {}),
-          ...(s.unavailableParticipants ? { unavailableParticipants: s.unavailableParticipants } : {}),
-          ...(s.yesCount !== undefined ? { yesCount: s.yesCount } : {}),
-          ...(s.maybeCount !== undefined ? { maybeCount: s.maybeCount } : {}),
-          ...(s.noCount !== undefined ? { noCount: s.noCount } : {}),
-          ...(s.score !== undefined ? { score: s.score } : {}),
-        })),
-        status: newStatus,
-      });
-      showSuccessToast(
-        slots.length > 0 ? t.replyPage.foundCommonSlots(slots.length) : t.replyPage.noCommonSlots,
-      );
-      setRequest((prev) =>
-        prev ? { ...prev, status: newStatus, commonAvailabilitySlots: slots } : null,
-      );
-      if (slots.length > 0) setIsResultsModalOpen(true);
-    } catch (err) {
-      console.error('Error calculating common times:', err);
-      showErrorToast(t.replyPage.calculateFailed);
-    } finally {
-      setIsCalculatingSlots(false);
-    }
-  }, [request, t]);
-
   const handleInitiateConfirm = useCallback(() => {
-    if (!request || selectedFinalSlotIndex === null || !commonSlots[selectedFinalSlotIndex]) {
+    if (!request || selectedFinalSlotIndex === null || !liveCommonSlots[selectedFinalSlotIndex]) {
       showErrorToast(t.replyPage.invalidSlot);
       return;
     }
@@ -294,8 +239,8 @@ export default function ReplyToHangoutRequestPage() {
       showErrorToast(t.replyPage.onlyCreator);
       return;
     }
-    setSlotToConfirm(commonSlots[selectedFinalSlotIndex]);
-  }, [commonSlots, request, selectedFinalSlotIndex, t, user]);
+    setSlotToConfirm(liveCommonSlots[selectedFinalSlotIndex]);
+  }, [liveCommonSlots, request, selectedFinalSlotIndex, t, user]);
 
   const handleConfirmAndInvite = useCallback(async () => {
     if (!request || !slotToConfirm || !user) {
@@ -417,7 +362,7 @@ export default function ReplyToHangoutRequestPage() {
 
   const participantCount = Object.keys(request.participants || {}).length;
   const isCreator = !!user && user.uid === request.creatorUid;
-  const showSlotsActions = request.status !== 'confirmed' && request.status !== 'closed';
+  const canManageResults = request.status !== 'confirmed' && request.status !== 'closed';
   const submitLabel = hasUserAlreadySubmitted ? t.replyPage.updateAvailability : t.replyPage.submitAvailability;
   const hasCandidateGrid = !!request.candidateSlots?.length;
 
@@ -517,56 +462,128 @@ export default function ReplyToHangoutRequestPage() {
         </div>
       )}
 
-      {showSlotsActions && (
-        <section className="mb-8">
-          <h2 className="mb-4 text-2xl font-semibold text-slate-700">{t.replyPage.findCommonSlots}</h2>
-          {(request.status === 'results_ready' || request.status === 'no_slots_found') &&
-            commonSlots.length > 0 && (
-              <Button
-                onClick={() => setIsResultsModalOpen(true)}
-                variant="solid"
-                className="mb-4 w-full bg-green-600 py-3 text-lg text-white hover:bg-green-700"
-              >
-                {t.replyPage.viewCalculatedSlots}
-              </Button>
-            )}
-          {(request.status === 'results_ready' || request.status === 'no_slots_found') &&
-            commonSlots.length === 0 && (
-              <p className="rounded-md bg-slate-50 px-6 py-4 text-center text-slate-500">
-                {t.replyPage.noSlotsBasedOnLatest}
-              </p>
-            )}
-          {user &&
-            (request.status === 'pending_calculation' ||
-              request.status === 'pending' ||
-              request.status === 'results_ready' ||
-              request.status === 'no_slots_found') && (
-              <Button
-                variant="outline"
-                size="default"
-                className="w-full border-slate-300 hover:bg-slate-100"
-                onClick={handleCalculateCommonTimes}
-                isLoading={isCalculatingSlots}
-                disabled={isCalculatingSlots}
-              >
-                {isCalculatingSlots
-                  ? t.replyPage.calculating
-                  : request.status === 'results_ready' || request.status === 'no_slots_found'
-                    ? t.replyPage.recalculateCommonTimes
-                    : t.replyPage.calculateNow}
-              </Button>
-            )}
-          {request.status === 'pending' &&
-            request.desiredMemberCount > 0 &&
-            participantCount < request.desiredMemberCount && (
-            <p className="mt-3 text-center text-sm text-slate-500">
+      <section className="mb-8 rounded-lg bg-slate-50 p-6">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold text-slate-700">{t.replyPage.findCommonSlots}</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Results update automatically as participants submit their availability.
+            </p>
+          </div>
+          {canManageResults && liveCommonSlots.length > 0 && (
+            <Button
+              onClick={() => setIsResultsModalOpen(true)}
+              variant="solid"
+              className="bg-green-600 text-white hover:bg-green-700"
+            >
+              {t.replyPage.viewCalculatedSlots}
+            </Button>
+          )}
+        </div>
+
+        {hasCandidateGrid ? (
+          liveCommonSlots.length > 0 ? (
+            <div className="space-y-4">
+              {liveCommonSlots.map((slot, index) => {
+                const breakdown = getSlotAttendanceBreakdown(slot, request.participants ?? {});
+                return (
+                  <div key={`${slot.start.toISOString()}_${slot.end.toISOString()}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-500">Slot {index + 1}</p>
+                        <p className="text-lg font-semibold text-slate-800">
+                          {format(slot.start, 'EEE, MMM d, yyyy')}
+                        </p>
+                        <p className="text-sm text-slate-600">
+                          {format(slot.start, 'hh:mm a')} - {format(slot.end, 'hh:mm a')}
+                        </p>
+                      </div>
+                      <div className="grid gap-2 text-xs sm:grid-cols-3">
+                        <div className="rounded-md bg-emerald-100 px-3 py-2 text-emerald-800">
+                          Yes: {breakdown.yesCount}
+                        </div>
+                        <div className="rounded-md bg-amber-100 px-3 py-2 text-amber-800">
+                          Maybe: {breakdown.maybeCount}
+                        </div>
+                        <div className="rounded-md bg-rose-100 px-3 py-2 text-rose-800">
+                          No: {breakdown.noCount}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+                      {[
+                        {
+                          label: 'Can attend',
+                          tone: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+                          items: breakdown.yesParticipants,
+                        },
+                        {
+                          label: 'Maybe',
+                          tone: 'border-amber-200 bg-amber-50 text-amber-900',
+                          items: breakdown.maybeParticipants,
+                        },
+                        {
+                          label: 'Cannot attend',
+                          tone: 'border-rose-200 bg-rose-50 text-rose-900',
+                          items: breakdown.noParticipants,
+                        },
+                      ].map((group) => (
+                        <div key={group.label} className={`rounded-lg border p-3 ${group.tone}`}>
+                          <p className="text-xs font-semibold uppercase tracking-wide">{group.label}</p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {group.items.length > 0 ? (
+                              group.items.map((participant) => (
+                                <span
+                                  key={participant.uid}
+                                  className="rounded-full bg-white/80 px-2 py-1 text-xs font-medium"
+                                >
+                                  {participant.displayName}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs opacity-70">None</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {canManageResults && (
+                <Button
+                  onClick={() => setIsResultsModalOpen(true)}
+                  variant="outline"
+                  className="w-full border-slate-300 hover:bg-slate-100"
+                >
+                  Review and confirm a slot
+                </Button>
+              )}
+            </div>
+          ) : (
+            <p className="rounded-md bg-white px-6 py-4 text-center text-slate-500">
+              {t.replyPage.noSlotsBasedOnLatest}
+            </p>
+          )
+        ) : (
+          <p className="rounded-md bg-white px-6 py-4 text-center text-slate-500">
+            No candidate slots are available for this Tsudoi.
+          </p>
+        )}
+
+        {request.desiredMemberCount > 0 &&
+          participantCount < request.desiredMemberCount &&
+          request.status !== 'confirmed' &&
+          request.status !== 'closed' && (
+            <p className="mt-4 text-center text-sm text-slate-500">
               {t.replyPage.waitingForMoreParticipants(
                 request.desiredMemberCount - participantCount,
               )}
             </p>
           )}
-        </section>
-      )}
+      </section>
 
       <footer className="mt-12 text-center">
         <Link href="/tsudoi">
@@ -576,7 +593,7 @@ export default function ReplyToHangoutRequestPage() {
         </Link>
       </footer>
 
-      {showSlotsActions && (
+      {canManageResults && (
         <CommonSlotsModal
           isOpen={isResultsModalOpen}
           onClose={() => {
@@ -584,7 +601,7 @@ export default function ReplyToHangoutRequestPage() {
             setSelectedFinalSlotIndex(null);
           }}
           request={request}
-          slots={commonSlots}
+          slots={liveCommonSlots}
           participants={request.participants ?? {}}
           selectedIndex={selectedFinalSlotIndex}
           setSelectedIndex={setSelectedFinalSlotIndex}

@@ -3,6 +3,7 @@ import {
   candidateSlotKey,
   deriveSlotResponsesFromEvents,
   findCommonAvailability,
+  getSlotAttendanceBreakdown,
   prepareCreatorEventsForRequest,
 } from '../hangoutUtils';
 import { HangoutRequestClientState } from '@/types/hangouts';
@@ -240,6 +241,44 @@ describe('findCommonAvailability', () => {
     expect(slots[0].yesCount).toBe(1);
   });
 
+  it('keeps candidate slots visible even when only some slots have explicit responses', () => {
+    const firstSlot = {
+      start: new Date('2026-05-20T10:00:00'),
+      end: new Date('2026-05-20T10:30:00'),
+    };
+    const secondSlot = {
+      start: new Date('2026-05-20T11:00:00'),
+      end: new Date('2026-05-20T11:30:00'),
+    };
+    const slots = findCommonAvailability(
+      makeRequest({
+        desiredMemberCount: 2,
+        candidateSlots: [firstSlot, secondSlot],
+        participants: {
+          a: {
+            uid: 'a',
+            displayName: 'A',
+            submittedAt: new Date(),
+            events: [],
+            slotResponses: {
+              [candidateSlotKey(firstSlot)]: 'yes',
+            },
+          },
+          b: {
+            uid: 'b',
+            displayName: 'B',
+            submittedAt: new Date(),
+            events: [],
+          },
+        },
+      }),
+    );
+
+    expect(slots).toHaveLength(2);
+    expect(slots[0].availableParticipants.sort()).toEqual(['a', 'b']);
+    expect(slots[1].availableParticipants.sort()).toEqual(['a', 'b']);
+  });
+
   it('prefills slot responses from busy calendar overlaps', () => {
     const firstSlot = {
       start: new Date('2026-05-20T10:00:00'),
@@ -256,6 +295,44 @@ describe('findCommonAvailability', () => {
 
     expect(responses[candidateSlotKey(firstSlot)]).toBe('no');
     expect(responses[candidateSlotKey(secondSlot)]).toBe('yes');
+  });
+
+  it('builds a per-participant attendance breakdown for a slot', () => {
+    const slot = {
+      start: new Date('2026-05-20T10:00:00'),
+      end: new Date('2026-05-20T10:30:00'),
+    };
+    const breakdown = getSlotAttendanceBreakdown(slot, {
+      a: {
+        uid: 'a',
+        displayName: 'A',
+        submittedAt: new Date(),
+        events: [],
+        slotResponses: {
+          [candidateSlotKey(slot)]: 'maybe',
+        },
+      },
+      b: {
+        uid: 'b',
+        displayName: 'B',
+        submittedAt: new Date(),
+        events: [{ title: 'busy', start: new Date('2026-05-20T10:05:00'), end: new Date('2026-05-20T10:20:00') }],
+      },
+      c: {
+        uid: 'c',
+        displayName: 'C',
+        submittedAt: new Date(),
+        events: [],
+      },
+    });
+
+    expect(breakdown.maybeParticipants.map((participant) => participant.uid)).toEqual(['a']);
+    expect(breakdown.noParticipants.map((participant) => participant.uid)).toEqual(['b']);
+    expect(breakdown.yesParticipants.map((participant) => participant.uid)).toEqual(['c']);
+    expect(breakdown.availableParticipants.sort()).toEqual(['a', 'c']);
+    expect(breakdown.yesCount).toBe(1);
+    expect(breakdown.maybeCount).toBe(1);
+    expect(breakdown.noCount).toBe(1);
   });
 });
 

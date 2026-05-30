@@ -32,12 +32,9 @@ export default function TsudoiPage() {
   const requests = useMemo(() => requestsQuery.data ?? [], [requestsQuery.data]);
   const summary = useMemo(
     () => ({
-      active: requests.filter((request) => request.status !== 'confirmed' && request.status !== 'closed').length,
-      waiting: requests.filter(
-        (request) =>
-          request.status === 'pending' || request.status === 'pending_calculation',
-      ).length,
-      ready: requests.filter((request) => request.status === 'results_ready').length,
+      open: requests.filter((request) => request.status !== 'confirmed' && request.status !== 'closed').length,
+      confirmed: requests.filter((request) => request.status === 'confirmed').length,
+      closed: requests.filter((request) => request.status === 'closed').length,
     }),
     [requests],
   );
@@ -154,9 +151,9 @@ export default function TsudoiPage() {
           </div>
           <div className="grid gap-3 text-sm">
             {[
-              { label: 'Active', value: summary.active, tone: 'bg-sky-50 text-sky-800' },
-              { label: 'Waiting', value: summary.waiting, tone: 'bg-amber-50 text-amber-800' },
-              { label: 'Ready', value: summary.ready, tone: 'bg-emerald-50 text-emerald-800' },
+              { label: 'Open', value: summary.open, tone: 'bg-sky-50 text-sky-800' },
+              { label: 'Confirmed', value: summary.confirmed, tone: 'bg-emerald-50 text-emerald-800' },
+              { label: 'Closed', value: summary.closed, tone: 'bg-slate-100 text-slate-700' },
             ].map((item) => (
               <div key={item.label} className={`rounded-xl px-4 py-3 ${item.tone}`}>
                 <p className="text-xs font-semibold uppercase tracking-wide">{item.label}</p>

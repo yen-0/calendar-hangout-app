@@ -4,12 +4,21 @@ import {
   DateRangeClient,
   TimeRange,
   ParticipantEventClient,
+  ParticipantDataClient,
   HangoutRequestClientState,
   CommonSlotClient,
   CandidateSlotClient,
   SlotResponseStatus,
 } from '@/types/hangouts';
 import { expandRecurringEvents } from './eventUtils';
+
+export function getHangoutStatusLabel(
+  status: HangoutRequestClientState['status'],
+): 'Open' | 'Confirmed' | 'Closed' {
+  if (status === 'confirmed') return 'Confirmed';
+  if (status === 'closed') return 'Closed';
+  return 'Open';
+}
 
 /**
  * For an event in the user's calendar, resolve the stampAvailability of its
@@ -215,52 +224,79 @@ export function deriveSlotResponsesFromEvents(
   );
 }
 
+export interface SlotAttendanceParticipant {
+  uid: string;
+  displayName: string;
+  status: SlotResponseStatus;
+}
+
+export interface SlotAttendanceBreakdown {
+  participants: SlotAttendanceParticipant[];
+  yesParticipants: SlotAttendanceParticipant[];
+  maybeParticipants: SlotAttendanceParticipant[];
+  noParticipants: SlotAttendanceParticipant[];
+  availableParticipants: string[];
+  yesCount: number;
+  maybeCount: number;
+  noCount: number;
+}
+
+export function getParticipantAttendanceStatus(
+  slot: CandidateSlotClient,
+  participant: ParticipantDataClient,
+): SlotResponseStatus {
+  const key = candidateSlotKey(slot);
+  return participant.slotResponses?.[key] ??
+    (isParticipantFree(participant.events, slot.start, slot.end) ? 'yes' : 'no');
+}
+
+export function getSlotAttendanceBreakdown(
+  slot: CandidateSlotClient,
+  participants: HangoutRequestClientState['participants'],
+): SlotAttendanceBreakdown {
+  const participantsList = Object.values(participants).map((participant) => ({
+    uid: participant.uid,
+    displayName: participant.displayName,
+    status: getParticipantAttendanceStatus(slot, participant),
+  }));
+
+  const yesParticipants = participantsList.filter((participant) => participant.status === 'yes');
+  const maybeParticipants = participantsList.filter((participant) => participant.status === 'maybe');
+  const noParticipants = participantsList.filter((participant) => participant.status === 'no');
+
+  return {
+    participants: participantsList,
+    yesParticipants,
+    maybeParticipants,
+    noParticipants,
+    availableParticipants: [...yesParticipants, ...maybeParticipants].map((participant) => participant.uid),
+    yesCount: yesParticipants.length,
+    maybeCount: maybeParticipants.length,
+    noCount: noParticipants.length,
+  };
+}
+
 function scoreCandidateSlotFromResponses(
   slot: CandidateSlotClient,
-  participantIds: string[],
   participants: HangoutRequestClientState['participants'],
   desiredMemberCount: number,
 ): CommonSlotClient | null {
-  const yesParticipants: string[] = [];
-  const maybeParticipants: string[] = [];
-  const unavailableParticipants: string[] = [];
-  const key = candidateSlotKey(slot);
-  let hasExplicitResponse = false;
-
-  for (const pid of participantIds) {
-    const participant = participants[pid];
-    const response = participant.slotResponses?.[key];
-    if (response) hasExplicitResponse = true;
-
-    if (response === 'yes') {
-      yesParticipants.push(pid);
-    } else if (response === 'maybe') {
-      maybeParticipants.push(pid);
-    } else if (response === 'no') {
-      unavailableParticipants.push(pid);
-    } else if (isParticipantFree(participant.events, slot.start, slot.end)) {
-      yesParticipants.push(pid);
-    } else {
-      unavailableParticipants.push(pid);
-    }
-  }
-
-  if (!hasExplicitResponse) return null;
+  const breakdown = getSlotAttendanceBreakdown(slot, participants);
 
   const minimumViableCount = desiredMemberCount > 0 ? desiredMemberCount : 1;
-  const viableCount = yesParticipants.length + maybeParticipants.length;
+  const viableCount = breakdown.yesCount + breakdown.maybeCount;
   if (viableCount < minimumViableCount) return null;
 
   return {
     start: new Date(slot.start),
     end: new Date(slot.end),
-    availableParticipants: [...yesParticipants, ...maybeParticipants],
-    maybeParticipants,
-    unavailableParticipants,
-    yesCount: yesParticipants.length,
-    maybeCount: maybeParticipants.length,
-    noCount: unavailableParticipants.length,
-    score: yesParticipants.length * 100 - maybeParticipants.length * 10 - unavailableParticipants.length,
+    availableParticipants: breakdown.availableParticipants,
+    maybeParticipants: breakdown.maybeParticipants.map((participant) => participant.uid),
+    unavailableParticipants: breakdown.noParticipants.map((participant) => participant.uid),
+    yesCount: breakdown.yesCount,
+    maybeCount: breakdown.maybeCount,
+    noCount: breakdown.noCount,
+    score: breakdown.yesCount * 100 - breakdown.maybeCount * 10 - breakdown.noCount,
   };
 }
 
@@ -291,7 +327,7 @@ export const findCommonAvailability = (
   if (candidateSlots && candidateSlots.length > 0) {
     const responseScoredSlots = candidateSlots
       .map((slot) =>
-        scoreCandidateSlotFromResponses(slot, participantIds, participants, minimumViableCount),
+        scoreCandidateSlotFromResponses(slot, participants, minimumViableCount),
       )
       .filter((slot): slot is CommonSlotClient => !!slot);
 

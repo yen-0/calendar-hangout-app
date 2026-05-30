@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { HangoutRequestClientState } from '@/types/hangouts';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
+import { getHangoutStatusLabel } from '@/utils/hangoutUtils';
 
 interface Props {
   request: HangoutRequestClientState;
@@ -31,6 +32,7 @@ export function HangoutRequestCard({
   const { t } = useLanguage();
   const showCreatorActions = isCreator && request.status !== 'closed';
   const allowEditDelete = request.status !== 'confirmed';
+  const statusLabel = getHangoutStatusLabel(request.status);
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 shadow">
@@ -43,7 +45,7 @@ export function HangoutRequestCard({
             {t.hangouts.created}: {format(request.createdAt, 'PPP')}
           </p>
           <p className="text-xs text-gray-500">
-            {t.hangouts.status}: <span className="font-medium capitalize">{request.status.replace(/_/g, ' ')}</span>
+            {t.hangouts.status}: <span className="font-medium">{statusLabel}</span>
           </p>
           <p className="text-xs text-gray-500">
             {t.hangouts.participants}: {memberTarget}
