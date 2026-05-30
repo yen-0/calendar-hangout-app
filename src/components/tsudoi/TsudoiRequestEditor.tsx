@@ -1,4 +1,5 @@
 'use client';
+
 import { parseISO, startOfWeek } from 'date-fns';
 import { useMemo, useState } from 'react';
 import { addDays, addWeeks, addMinutes, endOfDay, format, startOfDay } from 'date-fns';
@@ -8,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useLanguage } from '@/hooks/useLanguage';
 import { CandidateSlotClient, HangoutRequestFormData } from '@/types/hangouts';
+
 interface Props {
   mode: 'create' | 'edit';
   initialData?: Partial<HangoutRequestFormData> & { weekStartDate?: Date };
@@ -256,7 +258,8 @@ export function TsudoiRequestEditor({
                     {rowIndex % Math.max(1, Math.round(60 / cellMinutes)) === 0 ? rowLabel : ''}
                   </div>
                   {weekDays.map((day) => {
-                    const key = slotKey(day.index, rowIndex);
+                    {/* FIXED: Passed day.date instead of day.index */}
+                    const key = slotKey(day.date, rowIndex);
                     const isSelected = selectedCells.has(key);
                     return (
                       <button
@@ -298,4 +301,3 @@ export function TsudoiRequestEditor({
     </form>
   );
 }
-
