@@ -1,5 +1,5 @@
 'use client';
-import { parseISO } from 'date-fns';
+import { parseISO, startOfWeek } from 'date-fns';
 import { useMemo, useState } from 'react';
 import { addDays, addWeeks, addMinutes, endOfDay, format, startOfDay } from 'date-fns';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useLanguage } from '@/hooks/useLanguage';
 import { CandidateSlotClient, HangoutRequestFormData } from '@/types/hangouts';
-
 interface Props {
   mode: 'create' | 'edit';
   initialData?: Partial<HangoutRequestFormData> & { weekStartDate?: Date };
@@ -83,7 +82,7 @@ export function TsudoiRequestEditor({
   );
 
   const moveWeek = (weeks: number) => {
-    setWeekStartDate((current) => getWeekStart(addWeeks(current, weeks)));
+    setWeekStartDate((current) => startOfWeek(addWeeks(current, weeks)));
   };
 
   const previewSlots = useMemo(() => {
