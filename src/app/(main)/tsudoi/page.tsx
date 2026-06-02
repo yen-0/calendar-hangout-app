@@ -12,18 +12,65 @@ import { HangoutRequestCard } from '@/components/hangouts/HangoutRequestCard';
 import { HangoutsEmptyState } from '@/components/hangouts/HangoutsEmptyState';
 import { showErrorToast, showInfoToast, showSuccessToast } from '@/lib/toasts';
 import { HangoutRequestClientState } from '@/types/hangouts';
-import {
-  useDeleteHangoutRequest,
-  useHangoutRequestsForUser,
-} from '@/lib/queries/hangoutRequests';
+import { useDeleteHangoutRequest, useHangoutRequestsForUser } from '@/lib/queries/hangoutRequests';
 import { useLanguage } from '@/hooks/useLanguage';
+
+const copy = {
+  ja: {
+    eyebrow: '公開調整をすぐ始める',
+    title: '候補を送って、集めて、確定する。',
+    body:
+      'アカウントなしでも始められる公開セッションで、参加者の空き時間を集めてそのまま候補を確定できます。',
+    createPrimary: '新しい調整を作成',
+    inviteSecondary: '友だちを招待',
+    summary: ['公開中', '確定済み', '終了済み'],
+    introTitle: 'アカウントなしでも使える公開モード',
+    introBody:
+      'このページでは一時的な公開セッションを使って、すぐにリンク共有と空き時間の収集を始められます。',
+    sectionTitle: '調整一覧',
+    empty: 'まだ公開調整はありません。',
+    createFirst: '最初の調整を作る',
+    loading: '読み込み中...',
+    signedOut: 'サインインすると自分の調整を確認できます。',
+    requestClosed: '調整を終了しました。',
+    requestDeleted: '調整を削除しました。',
+    shareCopied: 'リンクをコピーしました。',
+    createError: '公開セッションを開始できませんでした。',
+    deleteConfirmPrefix: 'この調整を削除しますか？',
+    deleteConfirmSuffix: 'この操作は元に戻せません。',
+  },
+  en: {
+    eyebrow: 'Start public scheduling instantly',
+    title: 'Share candidate times, collect replies, confirm the best one.',
+    body:
+      'Use the public session flow to collect everyone’s availability and confirm a time without requiring an account.',
+    createPrimary: 'Create request',
+    inviteSecondary: 'Invite from friends',
+    summary: ['Open', 'Confirmed', 'Closed'],
+    introTitle: 'Public mode without an account',
+    introBody:
+      'This page uses a temporary public session so you can share a link and collect availability right away.',
+    sectionTitle: 'Requests',
+    empty: 'No public requests yet.',
+    createFirst: 'Create the first request',
+    loading: 'Loading...',
+    signedOut: 'Sign in to manage your own requests.',
+    requestClosed: 'Request closed.',
+    requestDeleted: 'Request deleted.',
+    shareCopied: 'Link copied.',
+    createError: 'Could not start a public session.',
+    deleteConfirmPrefix: 'Delete this request?',
+    deleteConfirmSuffix: 'This cannot be undone.',
+  },
+} as const;
 
 export default function TsudoiPage() {
   const { user, loading: authLoading, isPublicSession, ensurePublicSession } = useAuth();
   const router = useRouter();
   const requestsQuery = useHangoutRequestsForUser(user?.uid);
   const deleteMutation = useDeleteHangoutRequest();
-  const { t } = useLanguage();
+  const { language } = useLanguage();
+  const content = copy[language];
 
   const [pendingDelete, setPendingDelete] = useState<HangoutRequestClientState | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -43,43 +90,43 @@ export default function TsudoiPage() {
     if (authLoading || user) return;
     void ensurePublicSession().catch((error) => {
       console.error('Failed to start public session:', error);
-      setPublicSessionError('Could not start a public scheduling session.');
+      setPublicSessionError(content.createError);
     });
-  }, [authLoading, ensurePublicSession, user]);
+  }, [authLoading, content.createError, ensurePublicSession, user]);
 
   const copyShareLink = useCallback(
     (id: string) => {
       const link = `${window.location.origin}/tsudoi/reply/${id}`;
       if (!navigator.clipboard) {
-        showErrorToast('Clipboard API not available.');
+        showErrorToast(language === 'ja' ? 'このブラウザではクリップボードを使えません。' : 'Clipboard API not available.');
         return;
       }
       navigator.clipboard
         .writeText(link)
-        .then(() => showInfoToast(t.hangouts.shareLinkCopied))
-        .catch(() => showErrorToast('Failed to copy link.'));
+        .then(() => showInfoToast(content.shareCopied))
+        .catch(() => showErrorToast(language === 'ja' ? 'リンクのコピーに失敗しました。' : 'Failed to copy link.'));
     },
-    [t.hangouts.shareLinkCopied],
+    [content.shareCopied, language],
   );
 
   const handleCloseOrArchive = useCallback(
     async (req: HangoutRequestClientState) => {
       if (!user || user.uid !== req.creatorUid) return;
-      if (!confirm(`Close the request "${req.requestName}"?`)) return;
+      if (!confirm(`${content.deleteConfirmPrefix} "${req.requestName}" ${content.deleteConfirmSuffix}`)) return;
       setIsProcessing(true);
       try {
         const { updateHangoutRequestDetails } = await import('@/lib/firebase/firestoreService');
         await updateHangoutRequestDetails(req.id, { status: 'closed' });
-        showSuccessToast(t.hangouts.requestClosed);
+        showSuccessToast(content.requestClosed);
         await requestsQuery.refetch();
       } catch (err) {
         console.error('Failed to close:', err);
-        showErrorToast(`Failed to close. ${(err as Error).message}`);
+        showErrorToast(language === 'ja' ? `調整の終了に失敗しました。 ${(err as Error).message}` : `Failed to close the request. ${(err as Error).message}`);
       } finally {
         setIsProcessing(false);
       }
     },
-    [requestsQuery, t.hangouts.requestClosed, user],
+    [content.deleteConfirmPrefix, content.deleteConfirmSuffix, content.requestClosed, language, requestsQuery, user],
   );
 
   const handleDeleteConfirm = useCallback(async () => {
@@ -87,25 +134,25 @@ export default function TsudoiPage() {
     setIsProcessing(true);
     try {
       await deleteMutation.mutateAsync(pendingDelete.id);
-      showSuccessToast(t.hangouts.requestDeleted);
+      showSuccessToast(content.requestDeleted);
       setPendingDelete(null);
       await requestsQuery.refetch();
     } catch (err) {
       console.error('Failed to delete:', err);
-      showErrorToast(`Failed to delete. ${(err as Error).message}`);
+      showErrorToast(language === 'ja' ? `調整の削除に失敗しました。 ${(err as Error).message}` : `Failed to delete the request. ${(err as Error).message}`);
     } finally {
       setIsProcessing(false);
     }
-  }, [deleteMutation, pendingDelete, requestsQuery, t.hangouts.requestDeleted, user]);
+  }, [content.requestDeleted, deleteMutation, language, pendingDelete, requestsQuery, user]);
 
   if (authLoading || (!user && !publicSessionError)) {
-    return <div className="p-6 text-center">{t.hangouts.loadingAuth}</div>;
+    return <div className="p-6 text-center text-slate-500">{content.loading}</div>;
   }
 
   if (publicSessionError) {
     return (
       <div className="p-6 text-center text-red-600">
-        <p className="mb-2 text-lg font-semibold">{t.hangouts.guestPromptTitle}</p>
+        <p className="mb-2 text-lg font-semibold">{content.eyebrow}</p>
         <p>{publicSessionError}</p>
       </div>
     );
@@ -114,50 +161,57 @@ export default function TsudoiPage() {
   if (!user) {
     return (
       <div className="p-6 text-center">
-        <p className="mb-4">{t.hangouts.signedOutPrompt}</p>
+        <p className="mb-4">{content.signedOut}</p>
         <Link href="/sign-in">
-          <Button>{t.nav.signIn}</Button>
+          <Button className="bg-slate-950 text-white hover:bg-slate-800">Sign in</Button>
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="grid gap-6 p-6 md:grid-cols-[1fr_260px] md:p-8">
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <section className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/85 shadow-[0_24px_90px_-55px_rgba(15,23,42,0.45)] backdrop-blur">
+        <div className="grid gap-6 bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.12),_transparent_28%),linear-gradient(180deg,_rgba(255,255,255,0.95),_rgba(248,250,252,0.9))] p-6 sm:p-8 lg:grid-cols-[1.2fr_0.8fr] lg:p-10">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">Tsudoi</p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
-              Send a schedule poll first. Calendar and friends help when you need them.
+            <div className="inline-flex items-center gap-3 rounded-full border border-cyan-100 bg-cyan-50 px-4 py-2 text-sm font-semibold text-cyan-700">
+              <span className="h-2 w-2 rounded-full bg-cyan-500" />
+              {content.eyebrow}
+            </div>
+            <h1 className="mt-4 max-w-3xl text-3xl font-black tracking-tight text-slate-950 sm:text-4xl lg:text-5xl">
+              {content.title}
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
-              Create candidate slots, share a link, collect ○ △ × answers, and confirm the
-              strongest time. No account is required to start.
-            </p>
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">{content.body}</p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <Button
                 onClick={() => router.push('/tsudoi/request')}
-                className="bg-sky-600 text-white hover:bg-sky-700"
+                className="rounded-full bg-slate-950 px-6 text-white hover:bg-slate-800"
               >
-                Create Tsudoi
+                {content.createPrimary}
               </Button>
               {!isPublicSession && (
                 <Link href="/friends">
-                  <Button variant="outline">Invite from friends</Button>
+                  <Button variant="outline" className="rounded-full border-slate-300 bg-white">
+                    {content.inviteSecondary}
+                  </Button>
                 </Link>
               )}
             </div>
           </div>
-          <div className="grid gap-3 text-sm">
+
+          <div className="grid gap-3 text-sm sm:grid-cols-3 lg:grid-cols-1">
             {[
-              { label: 'Open', value: summary.open, tone: 'bg-sky-50 text-sky-800' },
-              { label: 'Confirmed', value: summary.confirmed, tone: 'bg-emerald-50 text-emerald-800' },
-              { label: 'Closed', value: summary.closed, tone: 'bg-slate-100 text-slate-700' },
+              { label: content.summary[0], value: summary.open, tone: 'from-cyan-50 to-cyan-100 text-cyan-900' },
+              {
+                label: content.summary[1],
+                value: summary.confirmed,
+                tone: 'from-emerald-50 to-emerald-100 text-emerald-900',
+              },
+              { label: content.summary[2], value: summary.closed, tone: 'from-slate-100 to-slate-200 text-slate-700' },
             ].map((item) => (
-              <div key={item.label} className={`rounded-xl px-4 py-3 ${item.tone}`}>
-                <p className="text-xs font-semibold uppercase tracking-wide">{item.label}</p>
-                <p className="mt-1 text-3xl font-bold">{item.value}</p>
+              <div key={item.label} className={`rounded-[1.5rem] bg-gradient-to-br ${item.tone} px-5 py-4`}>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em]">{item.label}</p>
+                <p className="mt-1 text-3xl font-black">{item.value}</p>
               </div>
             ))}
           </div>
@@ -165,26 +219,24 @@ export default function TsudoiPage() {
       </section>
 
       {isPublicSession && (
-        <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-indigo-900 shadow-sm">
-          <p className="text-sm font-semibold uppercase tracking-wide">{t.hangouts.publicRequestsIntroTitle}</p>
-          <p className="mt-1 text-sm">{t.hangouts.publicRequestsIntroBody}</p>
+        <div className="rounded-[1.5rem] border border-indigo-200 bg-indigo-50 px-5 py-4 text-indigo-900 shadow-sm">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em]">{content.introTitle}</p>
+          <p className="mt-1 text-sm leading-7">{content.introBody}</p>
         </div>
       )}
 
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">
-          {isPublicSession ? t.hangouts.publicRequests : t.hangouts.myRequests}
-        </h1>
+        <h2 className="text-2xl font-bold tracking-tight text-slate-950">{content.sectionTitle}</h2>
         <Button
           onClick={() => router.push('/tsudoi/request')}
-          className="bg-green-600 text-white hover:bg-green-700"
+          className="rounded-full bg-emerald-600 px-5 text-white hover:bg-emerald-700"
         >
-          {t.hangouts.createNewRequest}
+          {content.createPrimary}
         </Button>
       </div>
 
       {requestsQuery.isLoading ? (
-        <p className="py-4 text-center text-gray-500">{t.hangouts.loadingRequests}</p>
+        <p className="py-8 text-center text-slate-500">{content.loading}</p>
       ) : requests.length === 0 ? (
         <HangoutsEmptyState onCreate={() => router.push('/tsudoi/request')} />
       ) : (
@@ -208,10 +260,10 @@ export default function TsudoiPage() {
         isOpen={!!pendingDelete}
         onClose={() => setPendingDelete(null)}
         onConfirm={handleDeleteConfirm}
-        title={t.hangouts.delete}
-        message={`Delete the request "${pendingDelete?.requestName ?? ''}"? This cannot be undone.`}
+        title={content.sectionTitle}
+        message={`${content.deleteConfirmPrefix} "${pendingDelete?.requestName ?? ''}" ${content.deleteConfirmSuffix}`}
         isLoading={isProcessing}
-        confirmText={t.hangouts.delete}
+        confirmText={content.sectionTitle}
       />
     </div>
   );

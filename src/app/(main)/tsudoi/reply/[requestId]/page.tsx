@@ -14,6 +14,7 @@ import { HangoutDetailsCard } from '@/components/hangouts/HangoutDetailsCard';
 import { ConfirmedSlotBanner } from '@/components/hangouts/ConfirmedSlotBanner';
 import { CommonSlotsModal } from '@/components/hangouts/CommonSlotsModal';
 import { TsudoiResponseGrid } from '@/components/tsudoi/TsudoiResponseGrid';
+import { TsudoiWeeklyResponseGrid } from '@/components/tsudoi/TsudoiWeeklyResponseGrid';
 import { useLanguage } from '@/hooks/useLanguage';
 import {
   CommonSlotClient,
@@ -55,6 +56,7 @@ export default function ReplyToHangoutRequestPage() {
   const [slotToConfirm, setSlotToConfirm] = useState<CommonSlotClient | null>(null);
   const [slotResponses, setSlotResponses] = useState<Record<string, SlotResponseStatus>>({});
   const [publicDisplayName, setPublicDisplayName] = useState('');
+  const [responseView, setResponseView] = useState<'grid' | 'list'>('grid');
 
   const currentParticipant = useMemo(
     () => (user && request ? request.participants?.[user.uid] ?? null : null),
@@ -385,17 +387,55 @@ export default function ReplyToHangoutRequestPage() {
         <section className="mb-8 rounded-lg bg-slate-50 p-6">
           <h2 className="mb-2 text-xl font-semibold text-slate-700">{t.replyPage.yourParticipation}</h2>
           {hasCandidateGrid && (
-            <div className="mb-4">
-              <p className="mb-3 text-sm text-slate-500">
-                Mark each slot with circle, triangle, or cross. Calendar conflicts are prefilled,
-                but you can change every answer.
-              </p>
-              <TsudoiResponseGrid
-                candidateSlots={request.candidateSlots ?? []}
-                responses={slotResponses}
-                isLoading={isSubmittingAvailability}
-                onChange={setSlotResponses}
-              />
+            <div className="mb-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-slate-500">
+                  Mark each slot with circle, triangle, or cross. Calendar conflicts are prefilled, but
+                  you can change every answer.
+                </p>
+                <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={
+                      responseView === 'grid'
+                        ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-900'
+                        : 'border-transparent bg-transparent text-slate-600 hover:bg-slate-50'
+                    }
+                    onClick={() => setResponseView('grid')}
+                  >
+                    Weekly grid
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={
+                      responseView === 'list'
+                        ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-900'
+                        : 'border-transparent bg-transparent text-slate-600 hover:bg-slate-50'
+                    }
+                    onClick={() => setResponseView('list')}
+                  >
+                    List view
+                  </Button>
+                </div>
+              </div>
+              <div className={responseView === 'grid' ? 'block' : 'hidden'}>
+                <TsudoiWeeklyResponseGrid
+                  candidateSlots={request.candidateSlots ?? []}
+                  responses={slotResponses}
+                  isLoading={isSubmittingAvailability}
+                  onChange={setSlotResponses}
+                />
+              </div>
+              <div className={responseView === 'list' ? 'block' : 'hidden'}>
+                <TsudoiResponseGrid
+                  candidateSlots={request.candidateSlots ?? []}
+                  responses={slotResponses}
+                  isLoading={isSubmittingAvailability}
+                  onChange={setSlotResponses}
+                />
+              </div>
             </div>
           )}
           {!hasUserAlreadySubmitted && (
@@ -438,12 +478,53 @@ export default function ReplyToHangoutRequestPage() {
               placeholder={t.replyPage.displayNamePlaceholder}
             />
           </div>
-          <TsudoiResponseGrid
-            candidateSlots={request.candidateSlots ?? []}
-            responses={slotResponses}
-            isLoading={isSubmittingAvailability}
-            onChange={setSlotResponses}
-          />
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-slate-500">
+              Press a candidate cell to cycle through circle, triangle, and cross.
+            </p>
+            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+              <Button
+                type="button"
+                variant="outline"
+                className={
+                  responseView === 'grid'
+                    ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-900'
+                    : 'border-transparent bg-transparent text-slate-600 hover:bg-slate-50'
+                }
+                onClick={() => setResponseView('grid')}
+              >
+                Weekly grid
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className={
+                  responseView === 'list'
+                    ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-900'
+                    : 'border-transparent bg-transparent text-slate-600 hover:bg-slate-50'
+                }
+                onClick={() => setResponseView('list')}
+              >
+                List view
+              </Button>
+            </div>
+          </div>
+          <div className={responseView === 'grid' ? 'block' : 'hidden'}>
+            <TsudoiWeeklyResponseGrid
+              candidateSlots={request.candidateSlots ?? []}
+              responses={slotResponses}
+              isLoading={isSubmittingAvailability}
+              onChange={setSlotResponses}
+            />
+          </div>
+          <div className={responseView === 'list' ? 'block' : 'hidden'}>
+            <TsudoiResponseGrid
+              candidateSlots={request.candidateSlots ?? []}
+              responses={slotResponses}
+              isLoading={isSubmittingAvailability}
+              onChange={setSlotResponses}
+            />
+          </div>
           <Button
             className="mt-4 w-full bg-blue-600 text-white hover:bg-blue-700"
             onClick={handleSubmitPublicResponses}
