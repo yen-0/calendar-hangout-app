@@ -21,19 +21,19 @@ const RESPONSE_OPTIONS: Array<{
 }> = [
   {
     status: 'yes',
-    mark: '○',
+    mark: '\u25cb',
     label: 'Yes',
     selectedClass: 'border-emerald-600 bg-emerald-600 text-white',
   },
   {
     status: 'maybe',
-    mark: '△',
+    mark: '\u25b3',
     label: 'Maybe',
     selectedClass: 'border-amber-500 bg-amber-500 text-white',
   },
   {
     status: 'no',
-    mark: '×',
+    mark: '\u00d7',
     label: 'No',
     selectedClass: 'border-rose-600 bg-rose-600 text-white',
   },
@@ -114,4 +114,5 @@ export function TsudoiResponseGrid({
     </div>
   );
 }
+
 

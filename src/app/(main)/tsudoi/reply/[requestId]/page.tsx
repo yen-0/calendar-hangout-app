@@ -39,9 +39,70 @@ import { db } from '@/lib/firebase/config';
 import { CalendarEvent } from '@/types/events';
 import { writeHangoutToCalendars } from '@/lib/google/write-hangout-client';
 
+const responseViewCopy = {
+  ja: {
+    weeklyGridTitle: '\u9031\u30b0\u30ea\u30c3\u30c9',
+    weeklyGridBody: '\u9031\u306e\u5019\u88dc\u3092\u898b\u306a\u304c\u3089\u3001\u6642\u9593\u5e2f\u3054\u3068\u306b\u56de\u7b54\u3067\u304d\u307e\u3059\u3002',
+    listViewTitle: '\u30ea\u30b9\u30c8\u30d3\u30e5\u30fc',
+    listViewBody: '\u5019\u88dc\u3092\u65e5\u4ed8\u9806\u306e\u4e00\u89a7\u3067\u78ba\u8a8d\u3057\u3066\u30011\u4ef6\u305a\u3064\u56de\u7b54\u3067\u304d\u307e\u3059\u3002',
+  },
+  en: {
+    weeklyGridTitle: 'Weekly grid',
+    weeklyGridBody: 'Review the candidate week and answer by time block.',
+    listViewTitle: 'List view',
+    listViewBody: 'Review candidates as a chronological list and answer one by one.',
+  },
+} as const;
+
+interface ResponseViewsProps {
+  candidateSlots: NonNullable<HangoutRequestClientState['candidateSlots']>;
+  responses: Record<string, SlotResponseStatus>;
+  isLoading: boolean;
+  onChange: (responses: Record<string, SlotResponseStatus>) => void;
+  language: 'ja' | 'en';
+}
+
+function TsudoiResponseViews({ candidateSlots, responses, isLoading, onChange, language }: ResponseViewsProps) {
+  const content = responseViewCopy[language];
+
+  return (
+    <div className="space-y-6">
+      <section className="space-y-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800">{content.weeklyGridTitle}</h3>
+            <p className="text-sm text-slate-500">{content.weeklyGridBody}</p>
+          </div>
+        </div>
+        <TsudoiWeeklyResponseGrid
+          candidateSlots={candidateSlots}
+          responses={responses}
+          isLoading={isLoading}
+          onChange={onChange}
+        />
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800">{content.listViewTitle}</h3>
+            <p className="text-sm text-slate-500">{content.listViewBody}</p>
+          </div>
+        </div>
+        <TsudoiResponseGrid
+          candidateSlots={candidateSlots}
+          responses={responses}
+          isLoading={isLoading}
+          onChange={onChange}
+        />
+      </section>
+    </div>
+  );
+}
+
 export default function ReplyToHangoutRequestPage() {
   const { user, loading: authLoading, ensurePublicSession, isPublicSession } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const params = useParams();
   const requestId = params?.requestId as string | undefined;
 
@@ -56,7 +117,6 @@ export default function ReplyToHangoutRequestPage() {
   const [slotToConfirm, setSlotToConfirm] = useState<CommonSlotClient | null>(null);
   const [slotResponses, setSlotResponses] = useState<Record<string, SlotResponseStatus>>({});
   const [publicDisplayName, setPublicDisplayName] = useState('');
-  const [responseView, setResponseView] = useState<'grid' | 'list'>('grid');
 
   const currentParticipant = useMemo(
     () => (user && request ? request.participants?.[user.uid] ?? null : null),
@@ -387,55 +447,18 @@ export default function ReplyToHangoutRequestPage() {
         <section className="mb-8 rounded-lg bg-slate-50 p-6">
           <h2 className="mb-2 text-xl font-semibold text-slate-700">{t.replyPage.yourParticipation}</h2>
           {hasCandidateGrid && (
-            <div className="mb-4 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-slate-500">
-                  Mark each slot with circle, triangle, or cross. Calendar conflicts are prefilled, but
-                  you can change every answer.
-                </p>
-                <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={
-                      responseView === 'grid'
-                        ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-900'
-                        : 'border-transparent bg-transparent text-slate-600 hover:bg-slate-50'
-                    }
-                    onClick={() => setResponseView('grid')}
-                  >
-                    Weekly grid
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={
-                      responseView === 'list'
-                        ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-900'
-                        : 'border-transparent bg-transparent text-slate-600 hover:bg-slate-50'
-                    }
-                    onClick={() => setResponseView('list')}
-                  >
-                    List view
-                  </Button>
-                </div>
-              </div>
-              <div className={responseView === 'grid' ? 'block' : 'hidden'}>
-                <TsudoiWeeklyResponseGrid
-                  candidateSlots={request.candidateSlots ?? []}
-                  responses={slotResponses}
-                  isLoading={isSubmittingAvailability}
-                  onChange={setSlotResponses}
-                />
-              </div>
-              <div className={responseView === 'list' ? 'block' : 'hidden'}>
-                <TsudoiResponseGrid
-                  candidateSlots={request.candidateSlots ?? []}
-                  responses={slotResponses}
-                  isLoading={isSubmittingAvailability}
-                  onChange={setSlotResponses}
-                />
-              </div>
+            <div className="mb-4">
+              <p className="mb-4 text-sm text-slate-500">
+                Mark each slot with circle, triangle, or cross. Calendar conflicts are prefilled, but
+                you can change every answer.
+              </p>
+              <TsudoiResponseViews
+                candidateSlots={request.candidateSlots ?? []}
+                responses={slotResponses}
+                isLoading={isSubmittingAvailability}
+                onChange={setSlotResponses}
+                language={language === 'ja' ? 'ja' : 'en'}
+              />
             </div>
           )}
           {!hasUserAlreadySubmitted && (
@@ -478,51 +501,16 @@ export default function ReplyToHangoutRequestPage() {
               placeholder={t.replyPage.displayNamePlaceholder}
             />
           </div>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-slate-500">
+          <div className="mb-4">
+            <p className="mb-4 text-sm text-slate-500">
               Press a candidate cell to cycle through circle, triangle, and cross.
             </p>
-            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
-              <Button
-                type="button"
-                variant="outline"
-                className={
-                  responseView === 'grid'
-                    ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-900'
-                    : 'border-transparent bg-transparent text-slate-600 hover:bg-slate-50'
-                }
-                onClick={() => setResponseView('grid')}
-              >
-                Weekly grid
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className={
-                  responseView === 'list'
-                    ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-900'
-                    : 'border-transparent bg-transparent text-slate-600 hover:bg-slate-50'
-                }
-                onClick={() => setResponseView('list')}
-              >
-                List view
-              </Button>
-            </div>
-          </div>
-          <div className={responseView === 'grid' ? 'block' : 'hidden'}>
-            <TsudoiWeeklyResponseGrid
+            <TsudoiResponseViews
               candidateSlots={request.candidateSlots ?? []}
               responses={slotResponses}
               isLoading={isSubmittingAvailability}
               onChange={setSlotResponses}
-            />
-          </div>
-          <div className={responseView === 'list' ? 'block' : 'hidden'}>
-            <TsudoiResponseGrid
-              candidateSlots={request.candidateSlots ?? []}
-              responses={slotResponses}
-              isLoading={isSubmittingAvailability}
-              onChange={setSlotResponses}
+              language={language === 'ja' ? 'ja' : 'en'}
             />
           </div>
           <Button
@@ -707,3 +695,4 @@ export default function ReplyToHangoutRequestPage() {
     </div>
   );
 }
+
