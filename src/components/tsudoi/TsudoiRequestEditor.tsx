@@ -18,7 +18,11 @@ import {
   TsudoiTimeGridRow,
   TsudoiVisibleWindow,
 } from '@/utils/tsudoiGridUtils';
-import { buildTsudoiWeekDays, getTsudoiWeekStart, isTsudoiSlotInPast } from '@/utils/tsudoiWeekUtils';
+import {
+  buildTsudoiWeekDays,
+  getTsudoiWeekStart,
+  isTsudoiSlotInPast,
+} from '@/utils/tsudoiWeekUtils';
 import { TsudoiWeeklyGridTable } from './TsudoiWeeklyGridTable';
 import { TsudoiVisibleWindowControl } from './TsudoiVisibleWindowControl';
 
@@ -73,9 +77,15 @@ const copy = {
   },
 } as const;
 
-export function TsudoiRequestEditor({ mode, initialData, isLoading = false, onCancel, onSave }: Props) {
+export function TsudoiRequestEditor({
+  mode,
+  initialData,
+  isLoading = false,
+  onCancel,
+  onSave,
+}: Props) {
   const { language } = useLanguage();
-  const content = copy[language];
+  const content = copy[language] ?? copy.en;
   const [requestName, setRequestName] = useState(initialData?.requestName ?? '');
   const [weekStartDate, setWeekStartDate] = useState(() =>
     getTsudoiWeekStart(initialData?.weekStartDate ?? new Date()),
@@ -84,7 +94,9 @@ export function TsudoiRequestEditor({ mode, initialData, isLoading = false, onCa
     String((initialData?.candidateSlotMinutes ?? DEFAULT_CELL_MINUTES) / 60),
   );
   const [desiredMemberCount, setDesiredMemberCount] = useState(
-    initialData?.desiredMemberCount && initialData.desiredMemberCount > 0 ? String(initialData.desiredMemberCount) : '',
+    initialData?.desiredMemberCount && initialData.desiredMemberCount > 0
+      ? String(initialData.desiredMemberCount)
+      : '',
   );
   const [now, setNow] = useState(() => new Date());
 
@@ -127,7 +139,10 @@ export function TsudoiRequestEditor({ mode, initialData, isLoading = false, onCa
     setVisibleWindow(initialVisibleWindow);
   }, [initialVisibleWindow]);
 
-  const rows = useMemo(() => buildTsudoiWeekGridRows(visibleWindow, gridStepMinutes), [gridStepMinutes, visibleWindow]);
+  const rows = useMemo(
+    () => buildTsudoiWeekGridRows(visibleWindow, gridStepMinutes),
+    [gridStepMinutes, visibleWindow],
+  );
 
   const moveWeek = (weeks: number) => {
     setWeekStartDate((current) => getTsudoiWeekStart(addWeeks(current, weeks)));
@@ -321,7 +336,12 @@ export function TsudoiRequestEditor({ mode, initialData, isLoading = false, onCa
             Cancel
           </Button>
         )}
-        <Button type="submit" className="bg-slate-950 text-white hover:bg-slate-800" isLoading={isLoading} disabled={isLoading}>
+        <Button
+          type="submit"
+          className="bg-slate-950 text-white hover:bg-slate-800"
+          isLoading={isLoading}
+          disabled={isLoading}
+        >
           {mode === 'edit' ? content.update : content.create}
         </Button>
       </div>

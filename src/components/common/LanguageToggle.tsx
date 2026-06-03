@@ -10,12 +10,12 @@ export function LanguageToggle() {
   ];
 
   if (!hydrated) {
-    return <div className="h-9 w-[120px] rounded-full border border-white/60 bg-white/50" />;
+    return <div className="h-9 w-[128px] border border-stone-300 bg-stone-100" />;
   }
 
   return (
     <div
-      className="inline-flex rounded-full border border-slate-200 bg-white/80 p-1 shadow-sm backdrop-blur"
+      className="inline-flex border border-stone-300 bg-white p-1"
       role="tablist"
       aria-label="Language"
     >
@@ -29,10 +29,10 @@ export function LanguageToggle() {
             aria-selected={active}
             onClick={() => setLanguage(option.value)}
             className={[
-              'rounded-full px-3 py-1.5 text-xs font-semibold transition',
+              'px-3 py-1.5 text-xs font-semibold transition',
               active
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                ? 'bg-slate-950 text-white'
+                : 'text-slate-600 hover:bg-stone-100 hover:text-slate-900',
             ].join(' ')}
           >
             {option.label}

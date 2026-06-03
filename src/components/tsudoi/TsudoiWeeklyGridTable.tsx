@@ -46,7 +46,7 @@ export function TsudoiWeeklyGridTable({
   timeHeaderContent,
 }: Props) {
   const { language } = useLanguage();
-  const content = copy[language];
+  const content = copy[language] ?? copy.en;
 
   return (
     <div className="overflow-auto">

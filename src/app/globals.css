@@ -3,19 +3,84 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #f4f1eb;
+  --foreground: #1f2933;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-stone-100 text-slate-900 antialiased;
+  }
+
+  ::selection {
+    @apply bg-amber-200 text-slate-950;
+  }
+}
+
+@layer components {
+  .page-frame {
+    @apply mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8;
+  }
+
+  .plain-shell {
+    @apply overflow-hidden border border-stone-300 bg-stone-50;
+  }
+
+  .shell-header {
+    @apply border-b border-stone-300 bg-stone-100;
+  }
+
+  .work-surface {
+    @apply border border-stone-300 bg-white;
+  }
+
+  .panel {
+    @apply border border-stone-300 bg-white p-5;
+  }
+
+  .panel-muted {
+    @apply border border-stone-300 bg-stone-100 p-5;
+  }
+
+  .kicker {
+    @apply text-xs font-semibold uppercase text-stone-500;
+  }
+
+  .eyebrow {
+    @apply inline-flex items-center border border-stone-300 bg-stone-100 px-3 py-1 text-xs font-semibold uppercase text-stone-600;
+  }
+
+  .primary-link {
+    @apply inline-flex items-center justify-center border border-slate-950 bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800;
+  }
+
+  .secondary-link {
+    @apply inline-flex items-center justify-center border border-stone-400 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 transition hover:bg-stone-100;
+  }
+
+  .quiet-link {
+    @apply inline-flex items-center justify-center border border-transparent px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-stone-100;
+  }
+
+  .metric-tile {
+    @apply border-l-4 border-slate-900 bg-white px-4 py-3;
+  }
+
+  .status-tile {
+    @apply border border-stone-300 bg-white px-4 py-3;
+  }
+
+  .calendar-strip {
+    @apply grid grid-cols-7 border border-stone-300 bg-white text-center text-xs;
+  }
+
+  .calendar-cell {
+    @apply min-h-16 border-r border-stone-200 p-2 last:border-r-0;
+  }
 }

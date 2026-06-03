@@ -11,37 +11,37 @@ import { LanguageSync } from '@/components/common/LanguageSync';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'ツドイ — カレンダー連携の日程調整',
+  title: 'Tsudoi - Calendar-aware scheduling',
   description:
-    'Google カレンダーの予定を読み取り、確定した時間を全員のカレンダーへ書き戻す日程調整アプリです。',
+    'Plan group hangouts with calendar conflicts, availability links, and confirmed event write-back.',
   manifest: '/manifest.json',
   icons: { icon: '/favicon.svg' },
-  applicationName: 'ツドイ',
+  applicationName: 'Tsudoi',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'ツドイ',
+    title: 'Tsudoi',
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#2563eb',
+  themeColor: '#f4f1eb',
   width: 'device-width',
   initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ja">
-      <body className={`${inter.className} bg-gray-100 text-gray-900`}>
+    <html lang="en">
+      <body className={`${inter.className} bg-stone-100 text-slate-900`}>
         <WebVitalsReporter />
         <QueryProvider>
           <AuthProvider>
             <LanguageSync />
             <div className="flex min-h-screen flex-col">
-              <main className="container mx-auto flex-grow p-4">{children}</main>
-              <footer className="bg-gray-200 p-4 text-center text-sm">
-                © {new Date().getFullYear()} ツドイ
+              <main className="flex-grow">{children}</main>
+              <footer className="border-t border-stone-300 bg-stone-100 px-4 py-4 text-center text-xs text-stone-600">
+                © {new Date().getFullYear()} Tsudoi
               </footer>
             </div>
             <ClientOnlyToastContainer

@@ -16,34 +16,32 @@ import { HangoutRequestFormData } from '@/types/hangouts';
 
 const copy = {
   ja: {
-    eyebrow: '公開候補を作成',
-    title: '候補日を並べて、リンクで共有する。',
-    body:
-      '週グリッドから候補を選んで公開すると、参加者はリンクから空き時間を入力できます。作成後はそのまま共有リンクをコピーできます。',
+    eyebrow: '候補を作成',
+    title: '週グリッドから候補を選び、回答リンクを発行する。',
+    body: '候補時間を選ぶと、参加者がアカウントなしで回答できる共有リンクを作成できます。',
     back: '一覧に戻る',
     success: '調整を作成しました。',
-    backToList: '一覧に戻る',
     createBack: '一覧へ戻る',
     signedOut: '候補を作成するにはサインインしてください。',
-    createButton: '新しい調整を作成',
+    createButton: 'サインイン',
+    note: '候補を保存すると、共有リンクのコピー画面に進みます。回答が集まったら一覧から確定できます。',
   },
   en: {
-    eyebrow: 'Create public candidate times',
-    title: 'Pick slots, publish a link, collect replies.',
-    body:
-      'Select candidate cells from the weekly grid and publish them. Participants can then reply from the shared link without an account.',
+    eyebrow: 'Create candidate times',
+    title: 'Pick slots from the weekly grid and publish a reply link.',
+    body: 'Select candidate cells, save the request, and share a public link so participants can reply without an account.',
     back: 'Back to list',
     success: 'Request created successfully.',
-    backToList: 'Back to list',
     createBack: 'Return to list',
     signedOut: 'Please sign in to create a request.',
-    createButton: 'Create a new request',
+    createButton: 'Sign in',
+    note: 'After saving the candidate set, you will get a share link. Once replies come in, confirm the final time from the request list.',
   },
 } as const;
 
 export default function TsudoiRequestCreatePage() {
   return (
-    <Suspense fallback={<div className="p-6 text-center text-slate-500">Loading...</div>}>
+    <Suspense fallback={<div className="p-6 text-center text-stone-500">Loading...</div>}>
       <TsudoiRequestCreatePageInner />
     </Suspense>
   );
@@ -82,7 +80,9 @@ function TsudoiRequestCreatePageInner() {
           formData.timeRanges,
           formData.candidateSlots ?? [],
         );
-        const creatorName = isPublicSession ? 'Public organizer' : user.displayName || user.email || 'Anonymous User';
+        const creatorName = isPublicSession
+          ? 'Public organizer'
+          : user.displayName || user.email || 'Anonymous User';
         const id = await createMutation.mutateAsync({
           creatorUid: user.uid,
           creatorName,
@@ -102,7 +102,7 @@ function TsudoiRequestCreatePageInner() {
   );
 
   if (authLoading || isBootstrappingPublicSession || !user) {
-    return <div className="p-6 text-center text-slate-500">Loading...</div>;
+    return <div className="p-6 text-center text-stone-500">Loading...</div>;
   }
 
   if (!user) {
@@ -110,40 +110,38 @@ function TsudoiRequestCreatePageInner() {
       <div className="p-6 text-center">
         <p className="mb-4">{content.signedOut}</p>
         <Link href="/sign-in">
-          <Button className="bg-slate-950 text-white hover:bg-slate-800">{content.createButton}</Button>
+          <Button>{content.createButton}</Button>
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+    <div className="page-frame">
       <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <aside className="rounded-[2rem] bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-900 p-6 text-white shadow-[0_24px_90px_-55px_rgba(15,23,42,0.8)] sm:p-8">
-          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200">{content.eyebrow}</p>
-          <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">{content.title}</h1>
-          <p className="mt-4 max-w-md text-sm leading-7 text-slate-200">{content.body}</p>
-          <div className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
-            {language === 'ja'
-              ? 'この画面で候補を確定すると、リンク共有と回答収集にすぐ進めます。'
-              : 'Once you confirm the candidate set here, you can copy the share link and start collecting replies.'}
+        <aside className="panel-muted">
+          <p className="eyebrow">{content.eyebrow}</p>
+          <h1 className="mt-4 text-3xl font-semibold leading-tight text-slate-950 sm:text-4xl">
+            {content.title}
+          </h1>
+          <p className="mt-4 max-w-md text-sm leading-7 text-stone-700">{content.body}</p>
+          <div className="mt-6 border-l-4 border-amber-500 bg-white p-4 text-sm leading-6 text-stone-700">
+            {content.note}
           </div>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link href="/tsudoi">
-              <Button variant="outline" className="rounded-full border-white/20 bg-white/10 text-white hover:bg-white/15">
-                {content.back}
-              </Button>
+              <Button variant="outline">{content.back}</Button>
             </Link>
           </div>
         </aside>
 
-        <section className="rounded-[2rem] border border-slate-200/80 bg-white p-5 shadow-[0_24px_90px_-55px_rgba(15,23,42,0.45)] sm:p-8">
+        <section className="work-surface p-5 sm:p-8">
           {createdRequestId ? (
             <div className="space-y-6">
               <ShareLinkPanel requestId={createdRequestId} />
               <div className="flex justify-end">
                 <Link href="/tsudoi">
-                  <Button className="rounded-full bg-slate-950 text-white hover:bg-slate-800">{content.createBack}</Button>
+                  <Button>{content.createBack}</Button>
                 </Link>
               </div>
             </div>

@@ -17,42 +17,37 @@ import { useLanguage } from '@/hooks/useLanguage';
 
 const copy = {
   ja: {
-    eyebrow: '公開調整をすぐ始める',
-    title: '候補を送って、集めて、確定する。',
-    body:
-      'アカウントなしでも始められる公開セッションで、参加者の空き時間を集めてそのまま候補を確定できます。',
-    createPrimary: '新しい調整を作成',
+    eyebrow: '公開調整',
+    title: '候補を送って、回答を集めて、予定を確定する。',
+    body: 'アカウントなしでも使える公開セッションです。参加者の空き時間を集め、候補の状態を確認できます。',
+    createPrimary: '調整を作成',
     inviteSecondary: '友だちを招待',
-    summary: ['公開中', '確定済み', '終了済み'],
-    introTitle: 'アカウントなしでも使える公開モード',
+    summary: ['進行中', '確定済み', '終了'],
+    introTitle: '公開モードで利用中',
     introBody:
-      'このページでは一時的な公開セッションを使って、すぐにリンク共有と空き時間の収集を始められます。',
+      'このページでは一時的な公開セッションを使っています。リンクを共有して、すぐに回答を集められます。',
     sectionTitle: '調整一覧',
-    empty: 'まだ公開調整はありません。',
-    createFirst: '最初の調整を作る',
     loading: '読み込み中...',
-    signedOut: 'サインインすると自分の調整を確認できます。',
+    signedOut: 'サインインすると自分の調整を管理できます。',
     requestClosed: '調整を終了しました。',
     requestDeleted: '調整を削除しました。',
     shareCopied: 'リンクをコピーしました。',
     createError: '公開セッションを開始できませんでした。',
-    deleteConfirmPrefix: 'この調整を削除しますか？',
+    deleteConfirmPrefix: 'この調整を削除しますか?',
     deleteConfirmSuffix: 'この操作は元に戻せません。',
+    confirmDelete: '削除',
   },
   en: {
-    eyebrow: 'Start public scheduling instantly',
-    title: 'Share candidate times, collect replies, confirm the best one.',
-    body:
-      'Use the public session flow to collect everyone’s availability and confirm a time without requiring an account.',
+    eyebrow: 'Public scheduling',
+    title: 'Share candidate times, collect replies, confirm the plan.',
+    body: 'Use the public session flow to collect availability and manage open requests without requiring every participant to create an account.',
     createPrimary: 'Create request',
     inviteSecondary: 'Invite from friends',
     summary: ['Open', 'Confirmed', 'Closed'],
-    introTitle: 'Public mode without an account',
+    sectionTitle: 'Requests',
+    introTitle: 'Using public mode',
     introBody:
       'This page uses a temporary public session so you can share a link and collect availability right away.',
-    sectionTitle: 'Requests',
-    empty: 'No public requests yet.',
-    createFirst: 'Create the first request',
     loading: 'Loading...',
     signedOut: 'Sign in to manage your own requests.',
     requestClosed: 'Request closed.',
@@ -61,6 +56,7 @@ const copy = {
     createError: 'Could not start a public session.',
     deleteConfirmPrefix: 'Delete this request?',
     deleteConfirmSuffix: 'This cannot be undone.',
+    confirmDelete: 'Delete',
   },
 } as const;
 
@@ -79,7 +75,9 @@ export default function TsudoiPage() {
   const requests = useMemo(() => requestsQuery.data ?? [], [requestsQuery.data]);
   const summary = useMemo(
     () => ({
-      open: requests.filter((request) => request.status !== 'confirmed' && request.status !== 'closed').length,
+      open: requests.filter(
+        (request) => request.status !== 'confirmed' && request.status !== 'closed',
+      ).length,
       confirmed: requests.filter((request) => request.status === 'confirmed').length,
       closed: requests.filter((request) => request.status === 'closed').length,
     }),
@@ -98,13 +96,21 @@ export default function TsudoiPage() {
     (id: string) => {
       const link = `${window.location.origin}/tsudoi/reply/${id}`;
       if (!navigator.clipboard) {
-        showErrorToast(language === 'ja' ? 'このブラウザではクリップボードを使えません。' : 'Clipboard API not available.');
+        showErrorToast(
+          language === 'ja'
+            ? 'このブラウザではクリップボードを使用できません。'
+            : 'Clipboard API not available.',
+        );
         return;
       }
       navigator.clipboard
         .writeText(link)
         .then(() => showInfoToast(content.shareCopied))
-        .catch(() => showErrorToast(language === 'ja' ? 'リンクのコピーに失敗しました。' : 'Failed to copy link.'));
+        .catch(() =>
+          showErrorToast(
+            language === 'ja' ? 'リンクのコピーに失敗しました。' : 'Failed to copy link.',
+          ),
+        );
     },
     [content.shareCopied, language],
   );
@@ -112,7 +118,12 @@ export default function TsudoiPage() {
   const handleCloseOrArchive = useCallback(
     async (req: HangoutRequestClientState) => {
       if (!user || user.uid !== req.creatorUid) return;
-      if (!confirm(`${content.deleteConfirmPrefix} "${req.requestName}" ${content.deleteConfirmSuffix}`)) return;
+      if (
+        !confirm(
+          `${content.deleteConfirmPrefix} "${req.requestName}" ${content.deleteConfirmSuffix}`,
+        )
+      )
+        return;
       setIsProcessing(true);
       try {
         const { updateHangoutRequestDetails } = await import('@/lib/firebase/firestoreService');
@@ -121,12 +132,23 @@ export default function TsudoiPage() {
         await requestsQuery.refetch();
       } catch (err) {
         console.error('Failed to close:', err);
-        showErrorToast(language === 'ja' ? `調整の終了に失敗しました。 ${(err as Error).message}` : `Failed to close the request. ${(err as Error).message}`);
+        showErrorToast(
+          language === 'ja'
+            ? `調整の終了に失敗しました。${(err as Error).message}`
+            : `Failed to close the request. ${(err as Error).message}`,
+        );
       } finally {
         setIsProcessing(false);
       }
     },
-    [content.deleteConfirmPrefix, content.deleteConfirmSuffix, content.requestClosed, language, requestsQuery, user],
+    [
+      content.deleteConfirmPrefix,
+      content.deleteConfirmSuffix,
+      content.requestClosed,
+      language,
+      requestsQuery,
+      user,
+    ],
   );
 
   const handleDeleteConfirm = useCallback(async () => {
@@ -139,19 +161,23 @@ export default function TsudoiPage() {
       await requestsQuery.refetch();
     } catch (err) {
       console.error('Failed to delete:', err);
-      showErrorToast(language === 'ja' ? `調整の削除に失敗しました。 ${(err as Error).message}` : `Failed to delete the request. ${(err as Error).message}`);
+      showErrorToast(
+        language === 'ja'
+          ? `調整の削除に失敗しました。${(err as Error).message}`
+          : `Failed to delete the request. ${(err as Error).message}`,
+      );
     } finally {
       setIsProcessing(false);
     }
   }, [content.requestDeleted, deleteMutation, language, pendingDelete, requestsQuery, user]);
 
   if (authLoading || (!user && !publicSessionError)) {
-    return <div className="p-6 text-center text-slate-500">{content.loading}</div>;
+    return <div className="p-6 text-center text-stone-500">{content.loading}</div>;
   }
 
   if (publicSessionError) {
     return (
-      <div className="p-6 text-center text-red-600">
+      <div className="p-6 text-center text-red-700">
         <p className="mb-2 text-lg font-semibold">{content.eyebrow}</p>
         <p>{publicSessionError}</p>
       </div>
@@ -163,37 +189,31 @@ export default function TsudoiPage() {
       <div className="p-6 text-center">
         <p className="mb-4">{content.signedOut}</p>
         <Link href="/sign-in">
-          <Button className="bg-slate-950 text-white hover:bg-slate-800">Sign in</Button>
+          <Button>Sign in</Button>
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <section className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/85 shadow-[0_24px_90px_-55px_rgba(15,23,42,0.45)] backdrop-blur">
-        <div className="grid gap-6 bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.12),_transparent_28%),linear-gradient(180deg,_rgba(255,255,255,0.95),_rgba(248,250,252,0.9))] p-6 sm:p-8 lg:grid-cols-[1.2fr_0.8fr] lg:p-10">
+    <div className="page-frame space-y-6">
+      <section className="work-surface">
+        <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[1.2fr_0.8fr] lg:p-8">
           <div>
-            <div className="inline-flex items-center gap-3 rounded-full border border-cyan-100 bg-cyan-50 px-4 py-2 text-sm font-semibold text-cyan-700">
-              <span className="h-2 w-2 rounded-full bg-cyan-500" />
-              {content.eyebrow}
-            </div>
-            <h1 className="mt-4 max-w-3xl text-3xl font-black tracking-tight text-slate-950 sm:text-4xl lg:text-5xl">
+            <div className="eyebrow">{content.eyebrow}</div>
+            <h1 className="mt-4 max-w-3xl text-3xl font-semibold leading-tight text-slate-950 sm:text-4xl">
               {content.title}
             </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">{content.body}</p>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-stone-700 sm:text-base">
+              {content.body}
+            </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <Button
-                onClick={() => router.push('/tsudoi/request')}
-                className="rounded-full bg-slate-950 px-6 text-white hover:bg-slate-800"
-              >
+              <Button onClick={() => router.push('/tsudoi/request')} className="px-5">
                 {content.createPrimary}
               </Button>
               {!isPublicSession && (
                 <Link href="/friends">
-                  <Button variant="outline" className="rounded-full border-slate-300 bg-white">
-                    {content.inviteSecondary}
-                  </Button>
+                  <Button variant="outline">{content.inviteSecondary}</Button>
                 </Link>
               )}
             </div>
@@ -201,17 +221,25 @@ export default function TsudoiPage() {
 
           <div className="grid gap-3 text-sm sm:grid-cols-3 lg:grid-cols-1">
             {[
-              { label: content.summary[0], value: summary.open, tone: 'from-cyan-50 to-cyan-100 text-cyan-900' },
+              {
+                label: content.summary[0],
+                value: summary.open,
+                accent: 'border-l-4 border-l-amber-500',
+              },
               {
                 label: content.summary[1],
                 value: summary.confirmed,
-                tone: 'from-emerald-50 to-emerald-100 text-emerald-900',
+                accent: 'border-l-4 border-l-emerald-600',
               },
-              { label: content.summary[2], value: summary.closed, tone: 'from-slate-100 to-slate-200 text-slate-700' },
+              {
+                label: content.summary[2],
+                value: summary.closed,
+                accent: 'border-l-4 border-l-stone-500',
+              },
             ].map((item) => (
-              <div key={item.label} className={`rounded-[1.5rem] bg-gradient-to-br ${item.tone} px-5 py-4`}>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em]">{item.label}</p>
-                <p className="mt-1 text-3xl font-black">{item.value}</p>
+              <div key={item.label} className={`status-tile ${item.accent}`}>
+                <p className="kicker">{item.label}</p>
+                <p className="mt-1 text-3xl font-semibold text-slate-950">{item.value}</p>
               </div>
             ))}
           </div>
@@ -219,24 +247,21 @@ export default function TsudoiPage() {
       </section>
 
       {isPublicSession && (
-        <div className="rounded-[1.5rem] border border-indigo-200 bg-indigo-50 px-5 py-4 text-indigo-900 shadow-sm">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em]">{content.introTitle}</p>
+        <div className="border border-amber-300 bg-amber-50 px-5 py-4 text-amber-950">
+          <p className="kicker text-amber-800">{content.introTitle}</p>
           <p className="mt-1 text-sm leading-7">{content.introBody}</p>
         </div>
       )}
 
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold tracking-tight text-slate-950">{content.sectionTitle}</h2>
-        <Button
-          onClick={() => router.push('/tsudoi/request')}
-          className="rounded-full bg-emerald-600 px-5 text-white hover:bg-emerald-700"
-        >
-          {content.createPrimary}
-        </Button>
+        <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+          {content.sectionTitle}
+        </h2>
+        <Button onClick={() => router.push('/tsudoi/request')}>{content.createPrimary}</Button>
       </div>
 
       {requestsQuery.isLoading ? (
-        <p className="py-8 text-center text-slate-500">{content.loading}</p>
+        <p className="py-8 text-center text-stone-500">{content.loading}</p>
       ) : requests.length === 0 ? (
         <HangoutsEmptyState onCreate={() => router.push('/tsudoi/request')} />
       ) : (
@@ -263,7 +288,7 @@ export default function TsudoiPage() {
         title={content.sectionTitle}
         message={`${content.deleteConfirmPrefix} "${pendingDelete?.requestName ?? ''}" ${content.deleteConfirmSuffix}`}
         isLoading={isProcessing}
-        confirmText={content.sectionTitle}
+        confirmText={content.confirmDelete}
       />
     </div>
   );

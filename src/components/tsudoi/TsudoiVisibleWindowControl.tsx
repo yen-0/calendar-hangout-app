@@ -61,7 +61,7 @@ export function TsudoiVisibleWindowControl({
   description,
 }: Props) {
   const { language } = useLanguage();
-  const content = copy[language];
+  const content = copy[language] ?? copy.en;
   const [isOpen, setIsOpen] = useState(false);
   const [draftWindow, setDraftWindow] = useState(visibleWindow);
 
@@ -99,7 +99,12 @@ export function TsudoiVisibleWindowControl({
         <span className="sr-only">{visibleWindowLabel}</span>
       </Button>
 
-      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={title ?? content.current} size="md">
+      <Modal
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        title={title ?? content.current}
+        size="md"
+      >
         <div className="space-y-5">
           <p className="text-sm text-slate-600">{description ?? content.current}</p>
 
@@ -182,7 +187,11 @@ export function TsudoiVisibleWindowControl({
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" className="bg-cyan-600 text-white hover:bg-cyan-700" onClick={applyDraft}>
+            <Button
+              type="button"
+              className="bg-cyan-600 text-white hover:bg-cyan-700"
+              onClick={applyDraft}
+            >
               Apply
             </Button>
           </div>
