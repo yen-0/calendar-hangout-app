@@ -12,7 +12,11 @@ import { fetchCalendarItems } from '@/lib/firebase/firestoreService';
 import { prepareCreatorEventsForRequest } from '@/utils/hangoutUtils';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { HangoutRequestFormData } from '@/types/hangouts';
+
+const ORGANIZER_NAME_STORAGE_KEY = 'tsudoi.publicOrganizerName';
 
 const copy = {
   ja: {
@@ -24,6 +28,10 @@ const copy = {
     createBack: '一覧へ戻る',
     signedOut: '候補を作成するにはサインインしてください。',
     createButton: 'サインイン',
+    organizerName: '主催者名',
+    organizerNameHelp: '回答ページの「作成者」として表示されます。',
+    organizerNamePlaceholder: '例: ゆき',
+    organizerNameRequired: '主催者名を入力してください。',
     note: '候補を保存すると、共有リンクのコピー画面に進みます。回答が集まったら一覧から確定できます。',
   },
   en: {
@@ -35,6 +43,10 @@ const copy = {
     createBack: 'Return to list',
     signedOut: 'Please sign in to create a request.',
     createButton: 'Sign in',
+    organizerName: 'Organizer name',
+    organizerNameHelp: 'Shown as the creator on the reply page.',
+    organizerNamePlaceholder: 'Example: Yuki',
+    organizerNameRequired: 'Please enter your organizer name.',
     note: 'After saving the candidate set, you will get a share link. Once replies come in, confirm the final time from the request list.',
   },
 } as const;
@@ -58,6 +70,7 @@ function TsudoiRequestCreatePageInner() {
   const [isSaving, setIsSaving] = useState(false);
   const [createdRequestId, setCreatedRequestId] = useState<string | null>(null);
   const [isBootstrappingPublicSession, setIsBootstrappingPublicSession] = useState(false);
+  const [organizerName, setOrganizerName] = useState('');
 
   useEffect(() => {
     if (authLoading || user) return;
@@ -65,12 +78,24 @@ function TsudoiRequestCreatePageInner() {
     void ensurePublicSession().finally(() => setIsBootstrappingPublicSession(false));
   }, [authLoading, ensurePublicSession, user]);
 
+  useEffect(() => {
+    if (!isPublicSession) return;
+    setOrganizerName(window.localStorage.getItem(ORGANIZER_NAME_STORAGE_KEY) ?? '');
+  }, [isPublicSession]);
+
   const handleSave = useCallback(
     async (formData: HangoutRequestFormData) => {
       if (!user) {
         showErrorToast(content.signedOut);
         return;
       }
+
+      const trimmedOrganizerName = organizerName.trim();
+      if (isPublicSession && !trimmedOrganizerName) {
+        showErrorToast(content.organizerNameRequired);
+        return;
+      }
+
       setIsSaving(true);
       try {
         const userEvents = isPublicSession ? [] : await fetchCalendarItems(user.uid);
@@ -81,8 +106,13 @@ function TsudoiRequestCreatePageInner() {
           formData.candidateSlots ?? [],
         );
         const creatorName = isPublicSession
-          ? 'Public organizer'
+          ? trimmedOrganizerName
           : user.displayName || user.email || 'Anonymous User';
+
+        if (isPublicSession) {
+          window.localStorage.setItem(ORGANIZER_NAME_STORAGE_KEY, trimmedOrganizerName);
+        }
+
         const id = await createMutation.mutateAsync({
           creatorUid: user.uid,
           creatorName,
@@ -98,7 +128,15 @@ function TsudoiRequestCreatePageInner() {
         setIsSaving(false);
       }
     },
-    [content.signedOut, content.success, createMutation, isPublicSession, user],
+    [
+      content.organizerNameRequired,
+      content.signedOut,
+      content.success,
+      createMutation,
+      isPublicSession,
+      organizerName,
+      user,
+    ],
   );
 
   if (authLoading || isBootstrappingPublicSession || !user) {
@@ -125,6 +163,22 @@ function TsudoiRequestCreatePageInner() {
             {content.title}
           </h1>
           <p className="mt-4 max-w-md text-sm leading-7 text-stone-700">{content.body}</p>
+
+          {isPublicSession && !createdRequestId && (
+            <div className="mt-6 border border-stone-300 bg-white p-4">
+              <Label htmlFor="organizerName">{content.organizerName}</Label>
+              <Input
+                id="organizerName"
+                className="mt-2 bg-white"
+                value={organizerName}
+                onChange={(event) => setOrganizerName(event.target.value)}
+                placeholder={content.organizerNamePlaceholder}
+                required
+              />
+              <p className="mt-2 text-xs leading-5 text-stone-600">{content.organizerNameHelp}</p>
+            </div>
+          )}
+
           <div className="mt-6 border-l-4 border-amber-500 bg-white p-4 text-sm leading-6 text-stone-700">
             {content.note}
           </div>
