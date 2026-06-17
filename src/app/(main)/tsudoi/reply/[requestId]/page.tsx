@@ -14,6 +14,7 @@ import { HangoutDetailsCard } from '@/components/hangouts/HangoutDetailsCard';
 import { ConfirmedSlotBanner } from '@/components/hangouts/ConfirmedSlotBanner';
 import { CommonSlotsModal } from '@/components/hangouts/CommonSlotsModal';
 import { TsudoiResponseGrid } from '@/components/tsudoi/TsudoiResponseGrid';
+import { TsudoiLiveResultsGrid } from '@/components/tsudoi/TsudoiLiveResultsGrid';
 import { TsudoiWeeklyResponseGrid } from '@/components/tsudoi/TsudoiWeeklyResponseGrid';
 import { useLanguage } from '@/hooks/useLanguage';
 import {
@@ -31,7 +32,6 @@ import {
 import {
   deriveSlotResponsesFromEvents,
   findCommonAvailability,
-  getSlotAttendanceBreakdown,
   prepareCreatorEventsForRequest,
 } from '@/utils/hangoutUtils';
 import { showErrorToast, showInfoToast, showSuccessToast } from '@/lib/toasts';
@@ -42,9 +42,11 @@ import { writeHangoutToCalendars } from '@/lib/google/write-hangout-client';
 const responseViewCopy = {
   ja: {
     weeklyGridTitle: '\u9031\u30b0\u30ea\u30c3\u30c9',
-    weeklyGridBody: '\u9031\u306e\u5019\u88dc\u3092\u898b\u306a\u304c\u3089\u3001\u6642\u9593\u5e2f\u3054\u3068\u306b\u56de\u7b54\u3067\u304d\u307e\u3059\u3002',
+    weeklyGridBody:
+      '\u9031\u306e\u5019\u88dc\u3092\u898b\u306a\u304c\u3089\u3001\u6642\u9593\u5e2f\u3054\u3068\u306b\u56de\u7b54\u3067\u304d\u307e\u3059\u3002',
     listViewTitle: '\u30ea\u30b9\u30c8\u30d3\u30e5\u30fc',
-    listViewBody: '\u5019\u88dc\u3092\u65e5\u4ed8\u9806\u306e\u4e00\u89a7\u3067\u78ba\u8a8d\u3057\u3066\u30011\u4ef6\u305a\u3064\u56de\u7b54\u3067\u304d\u307e\u3059\u3002',
+    listViewBody:
+      '\u5019\u88dc\u3092\u65e5\u4ed8\u9806\u306e\u4e00\u89a7\u3067\u78ba\u8a8d\u3057\u3066\u30011\u4ef6\u305a\u3064\u56de\u7b54\u3067\u304d\u307e\u3059\u3002',
   },
   en: {
     weeklyGridTitle: 'Weekly grid',
@@ -62,7 +64,13 @@ interface ResponseViewsProps {
   language: 'ja' | 'en';
 }
 
-function TsudoiResponseViews({ candidateSlots, responses, isLoading, onChange, language }: ResponseViewsProps) {
+function TsudoiResponseViews({
+  candidateSlots,
+  responses,
+  isLoading,
+  onChange,
+  language,
+}: ResponseViewsProps) {
   const content = responseViewCopy[language];
 
   return (
@@ -119,7 +127,7 @@ export default function ReplyToHangoutRequestPage() {
   const [publicDisplayName, setPublicDisplayName] = useState('');
 
   const currentParticipant = useMemo(
-    () => (user && request ? request.participants?.[user.uid] ?? null : null),
+    () => (user && request ? (request.participants?.[user.uid] ?? null) : null),
     [request, user],
   );
 
@@ -208,19 +216,16 @@ export default function ReplyToHangoutRequestPage() {
     };
   }, [currentParticipant?.slotResponses, isPublicSession, request, user]);
 
-  const syncLocalParticipant = useCallback(
-    (participant: ParticipantDataClient) => {
-      setHasUserAlreadySubmitted(true);
-      setRequest((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          participants: { ...prev.participants, [participant.uid]: participant },
-        };
-      });
-    },
-    [],
-  );
+  const syncLocalParticipant = useCallback((participant: ParticipantDataClient) => {
+    setHasUserAlreadySubmitted(true);
+    setRequest((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        participants: { ...prev.participants, [participant.uid]: participant },
+      };
+    });
+  }, []);
 
   const handleSubmitAvailability = useCallback(async () => {
     if (!user || !request || isPublicSession) {
@@ -242,9 +247,7 @@ export default function ReplyToHangoutRequestPage() {
         submittedAt: new Date(),
         events: participantEvents,
         slotResponses:
-          request.candidateSlots && request.candidateSlots.length > 0
-            ? slotResponses
-            : undefined,
+          request.candidateSlots && request.candidateSlots.length > 0 ? slotResponses : undefined,
       };
       await addParticipantToHangoutRequest(request.id, user.uid, newParticipant);
       showSuccessToast(t.replyPage.availabilitySubmitted);
@@ -258,39 +261,36 @@ export default function ReplyToHangoutRequestPage() {
     }
   }, [isPublicSession, request, slotResponses, syncLocalParticipant, t, user]);
 
-  const handleSubmitPublicResponses = useCallback(
-    async () => {
-      if (!user || !request || !isPublicSession) {
-        showErrorToast(t.replyPage.notLoggedInOrNotLoaded);
-        return;
-      }
-      if (!publicDisplayName.trim()) {
-        showErrorToast(t.replyPage.displayNameRequired);
-        return;
-      }
-      setIsSubmittingAvailability(true);
-      setPageError(null);
-      try {
-        const newParticipant: ParticipantDataClient = {
-          uid: user.uid,
-          displayName: publicDisplayName.trim(),
-          submittedAt: new Date(),
-          events: [],
-          slotResponses,
-        };
-        await addParticipantToHangoutRequest(request.id, user.uid, newParticipant);
-        showSuccessToast(t.replyPage.availabilitySubmitted);
-        syncLocalParticipant(newParticipant);
-      } catch (err) {
-        console.error('Error submitting public availability:', err);
-        setPageError(`${t.replyPage.failedToSubmitAvailability} ${(err as Error).message}`);
-        showErrorToast(t.replyPage.failedToSubmitAvailability);
-      } finally {
-        setIsSubmittingAvailability(false);
-      }
-    },
-    [isPublicSession, publicDisplayName, request, slotResponses, syncLocalParticipant, t, user],
-  );
+  const handleSubmitPublicResponses = useCallback(async () => {
+    if (!user || !request || !isPublicSession) {
+      showErrorToast(t.replyPage.notLoggedInOrNotLoaded);
+      return;
+    }
+    if (!publicDisplayName.trim()) {
+      showErrorToast(t.replyPage.displayNameRequired);
+      return;
+    }
+    setIsSubmittingAvailability(true);
+    setPageError(null);
+    try {
+      const newParticipant: ParticipantDataClient = {
+        uid: user.uid,
+        displayName: publicDisplayName.trim(),
+        submittedAt: new Date(),
+        events: [],
+        slotResponses,
+      };
+      await addParticipantToHangoutRequest(request.id, user.uid, newParticipant);
+      showSuccessToast(t.replyPage.availabilitySubmitted);
+      syncLocalParticipant(newParticipant);
+    } catch (err) {
+      console.error('Error submitting public availability:', err);
+      setPageError(`${t.replyPage.failedToSubmitAvailability} ${(err as Error).message}`);
+      showErrorToast(t.replyPage.failedToSubmitAvailability);
+    } finally {
+      setIsSubmittingAvailability(false);
+    }
+  }, [isPublicSession, publicDisplayName, request, slotResponses, syncLocalParticipant, t, user]);
 
   const handleInitiateConfirm = useCallback(() => {
     if (!request || selectedFinalSlotIndex === null || !liveCommonSlots[selectedFinalSlotIndex]) {
@@ -382,7 +382,9 @@ export default function ReplyToHangoutRequestPage() {
             endISO: slotEnd.toISOString(),
             participantUids: availableParticipants ?? [],
           });
-          const written = results.filter((r) => r.status === 'written' || r.status === 'updated').length;
+          const written = results.filter(
+            (r) => r.status === 'written' || r.status === 'updated',
+          ).length;
           const skipped = results.filter((r) => r.status === 'skipped_not_connected').length;
           const errored = results.filter((r) => r.status === 'error').length;
           if (written > 0) {
@@ -425,7 +427,9 @@ export default function ReplyToHangoutRequestPage() {
   const participantCount = Object.keys(request.participants || {}).length;
   const isCreator = !!user && user.uid === request.creatorUid;
   const canManageResults = request.status !== 'confirmed' && request.status !== 'closed';
-  const submitLabel = hasUserAlreadySubmitted ? t.replyPage.updateAvailability : t.replyPage.submitAvailability;
+  const submitLabel = hasUserAlreadySubmitted
+    ? t.replyPage.updateAvailability
+    : t.replyPage.submitAvailability;
   const hasCandidateGrid = !!request.candidateSlots?.length;
 
   return (
@@ -438,57 +442,66 @@ export default function ReplyToHangoutRequestPage() {
 
       {isPublicSession && (
         <div className="mb-8 rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-indigo-900 shadow-sm">
-          <p className="text-sm font-semibold uppercase tracking-wide">{t.replyPage.publicFlowTitle}</p>
+          <p className="text-sm font-semibold uppercase tracking-wide">
+            {t.replyPage.publicFlowTitle}
+          </p>
           <p className="mt-1 text-sm">{t.replyPage.publicFlowBody}</p>
         </div>
       )}
 
-      {user && !isPublicSession && request.status !== 'confirmed' && request.status !== 'closed' && (
-        <section className="mb-8 rounded-lg bg-slate-50 p-6">
-          <h2 className="mb-2 text-xl font-semibold text-slate-700">{t.replyPage.yourParticipation}</h2>
-          {hasCandidateGrid && (
-            <div className="mb-4">
-              <p className="mb-4 text-sm text-slate-500">
-                Mark each slot with circle, triangle, or cross. Calendar conflicts are prefilled, but
-                you can change every answer.
-              </p>
-              <TsudoiResponseViews
-                candidateSlots={request.candidateSlots ?? []}
-                responses={slotResponses}
+      {user &&
+        !isPublicSession &&
+        request.status !== 'confirmed' &&
+        request.status !== 'closed' && (
+          <section className="mb-8 rounded-lg bg-slate-50 p-6">
+            <h2 className="mb-2 text-xl font-semibold text-slate-700">
+              {t.replyPage.yourParticipation}
+            </h2>
+            {hasCandidateGrid && (
+              <div className="mb-4">
+                <p className="mb-4 text-sm text-slate-500">
+                  Mark each slot with circle, triangle, or cross. Calendar conflicts are prefilled,
+                  but you can change every answer.
+                </p>
+                <TsudoiResponseViews
+                  candidateSlots={request.candidateSlots ?? []}
+                  responses={slotResponses}
+                  isLoading={isSubmittingAvailability}
+                  onChange={setSlotResponses}
+                  language={language === 'ja' ? 'ja' : 'en'}
+                />
+              </div>
+            )}
+            {!hasUserAlreadySubmitted && (
+              <Button
+                variant="solid"
+                className="w-full bg-blue-600 text-white hover:bg-blue-700"
+                onClick={handleSubmitAvailability}
                 isLoading={isSubmittingAvailability}
-                onChange={setSlotResponses}
-                language={language === 'ja' ? 'ja' : 'en'}
-              />
-            </div>
-          )}
-          {!hasUserAlreadySubmitted && (
-            <Button
-              variant="solid"
-              className="w-full bg-blue-600 text-white hover:bg-blue-700"
-              onClick={handleSubmitAvailability}
-              isLoading={isSubmittingAvailability}
-              disabled={isSubmittingAvailability}
-            >
-              {t.replyPage.submitAvailability}
-            </Button>
-          )}
-          {hasUserAlreadySubmitted && (
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={handleSubmitAvailability}
-              isLoading={isSubmittingAvailability}
-              disabled={isSubmittingAvailability}
-            >
-              {t.replyPage.updateAvailability}
-            </Button>
-          )}
-        </section>
-      )}
+                disabled={isSubmittingAvailability}
+              >
+                {t.replyPage.submitAvailability}
+              </Button>
+            )}
+            {hasUserAlreadySubmitted && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={handleSubmitAvailability}
+                isLoading={isSubmittingAvailability}
+                disabled={isSubmittingAvailability}
+              >
+                {t.replyPage.updateAvailability}
+              </Button>
+            )}
+          </section>
+        )}
 
       {isPublicSession && (
         <section className="mb-8 rounded-lg bg-slate-50 p-6">
-          <h2 className="mb-2 text-xl font-semibold text-slate-700">{t.replyPage.yourParticipation}</h2>
+          <h2 className="mb-2 text-xl font-semibold text-slate-700">
+            {t.replyPage.yourParticipation}
+          </h2>
           <p className="mb-4 text-sm text-slate-500">
             Enter your name and mark each candidate with circle, triangle, or cross.
           </p>
@@ -551,91 +564,32 @@ export default function ReplyToHangoutRequestPage() {
         </div>
 
         {hasCandidateGrid ? (
-          liveCommonSlots.length > 0 ? (
-            <div className="space-y-4">
-              {liveCommonSlots.map((slot, index) => {
-                const breakdown = getSlotAttendanceBreakdown(slot, request.participants ?? {});
-                return (
-                  <div key={`${slot.start.toISOString()}_${slot.end.toISOString()}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-500">Slot {index + 1}</p>
-                        <p className="text-lg font-semibold text-slate-800">
-                          {format(slot.start, 'EEE, MMM d, yyyy')}
-                        </p>
-                        <p className="text-sm text-slate-600">
-                          {format(slot.start, 'hh:mm a')} - {format(slot.end, 'hh:mm a')}
-                        </p>
-                      </div>
-                      <div className="grid gap-2 text-xs sm:grid-cols-3">
-                        <div className="rounded-md bg-emerald-100 px-3 py-2 text-emerald-800">
-                          Yes: {breakdown.yesCount}
-                        </div>
-                        <div className="rounded-md bg-amber-100 px-3 py-2 text-amber-800">
-                          Maybe: {breakdown.maybeCount}
-                        </div>
-                        <div className="rounded-md bg-rose-100 px-3 py-2 text-rose-800">
-                          No: {breakdown.noCount}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid gap-3 md:grid-cols-3">
-                      {[
-                        {
-                          label: 'Can attend',
-                          tone: 'border-emerald-200 bg-emerald-50 text-emerald-900',
-                          items: breakdown.yesParticipants,
-                        },
-                        {
-                          label: 'Maybe',
-                          tone: 'border-amber-200 bg-amber-50 text-amber-900',
-                          items: breakdown.maybeParticipants,
-                        },
-                        {
-                          label: 'Cannot attend',
-                          tone: 'border-rose-200 bg-rose-50 text-rose-900',
-                          items: breakdown.noParticipants,
-                        },
-                      ].map((group) => (
-                        <div key={group.label} className={`rounded-lg border p-3 ${group.tone}`}>
-                          <p className="text-xs font-semibold uppercase tracking-wide">{group.label}</p>
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {group.items.length > 0 ? (
-                              group.items.map((participant) => (
-                                <span
-                                  key={participant.uid}
-                                  className="rounded-full bg-white/80 px-2 py-1 text-xs font-medium"
-                                >
-                                  {participant.displayName}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-xs opacity-70">None</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {canManageResults && (
-                <Button
-                  onClick={() => setIsResultsModalOpen(true)}
-                  variant="outline"
-                  className="w-full border-slate-300 hover:bg-slate-100"
-                >
-                  Review and confirm a slot
-                </Button>
-              )}
-            </div>
-          ) : (
-            <p className="rounded-md bg-white px-6 py-4 text-center text-slate-500">
-              {t.replyPage.noSlotsBasedOnLatest}
-            </p>
-          )
+          <div className="space-y-4">
+            <TsudoiLiveResultsGrid
+              candidateSlots={request.candidateSlots ?? []}
+              commonSlots={liveCommonSlots}
+              participants={request.participants ?? {}}
+              canSelect={canManageResults}
+              onSelectCommonSlot={(index) => {
+                setSelectedFinalSlotIndex(index);
+                setIsResultsModalOpen(true);
+              }}
+            />
+            {liveCommonSlots.length === 0 && (
+              <p className="rounded-md bg-white px-6 py-4 text-center text-slate-500">
+                {t.replyPage.noSlotsBasedOnLatest}
+              </p>
+            )}
+            {canManageResults && liveCommonSlots.length > 0 && (
+              <Button
+                onClick={() => setIsResultsModalOpen(true)}
+                variant="outline"
+                className="w-full border-slate-300 hover:bg-slate-100"
+              >
+                Review and confirm a slot
+              </Button>
+            )}
+          </div>
         ) : (
           <p className="rounded-md bg-white px-6 py-4 text-center text-slate-500">
             No candidate slots are available for this Tsudoi.
@@ -695,4 +649,3 @@ export default function ReplyToHangoutRequestPage() {
     </div>
   );
 }
-

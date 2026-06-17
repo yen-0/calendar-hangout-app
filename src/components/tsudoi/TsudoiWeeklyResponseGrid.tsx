@@ -33,10 +33,18 @@ const RESPONSE_MARKS: Record<SlotResponseStatus, string> = {
   no: '\u00d7',
 };
 
+const RESPONSE_CELL_CLASSES: Record<SlotResponseStatus, string> = {
+  yes: 'border-emerald-500 bg-emerald-100 text-emerald-900 hover:bg-emerald-200',
+  maybe: 'border-amber-500 bg-amber-100 text-amber-900 hover:bg-amber-200',
+  no: 'border-rose-500 bg-rose-100 text-rose-900 hover:bg-rose-200',
+};
+
 const copy = {
   ja: {
-    instructions: '\u5019\u88dc\u30bb\u30eb\u3092\u62bc\u3059\u3068\u3001\u25cb\u3001\u25b3\u3001\u00d7 \u306e\u9806\u3067\u5207\u308a\u66ff\u308f\u308a\u307e\u3059\u3002',
-    dayHeader: '\u65e5\u4ed8\u898b\u51fa\u3057\u3092\u62bc\u3059\u3068\u3001\u305d\u306e\u65e5\u306e\u5019\u88dc\u3092\u307e\u3068\u3081\u3066\u9078\u629e\u3067\u304d\u307e\u3059\u3002',
+    instructions:
+      '\u5019\u88dc\u30bb\u30eb\u3092\u62bc\u3059\u3068\u3001\u25cb\u3001\u25b3\u3001\u00d7 \u306e\u9806\u3067\u5207\u308a\u66ff\u308f\u308a\u307e\u3059\u3002',
+    dayHeader:
+      '\u65e5\u4ed8\u898b\u51fa\u3057\u3092\u62bc\u3059\u3068\u3001\u305d\u306e\u65e5\u306e\u5019\u88dc\u3092\u307e\u3068\u3081\u3066\u9078\u629e\u3067\u304d\u307e\u3059\u3002',
     legend: '\u25cb = \u53c2\u52a0\u53ef, \u25b3 = \u672a\u5b9a, \u00d7 = \u53c2\u52a0\u4e0d\u53ef',
     visibleWindowTitle: '\u8868\u793a\u7bc4\u56f2',
     visibleWindowDescription:
@@ -94,8 +102,7 @@ export function TsudoiWeeklyResponseGrid({
   const weekDays = useMemo(() => buildTsudoiWeekDays(weekStartDate), [weekStartDate]);
   const weekEndDate = useMemo(() => addWeeks(weekStartDate, 1), [weekStartDate]);
   const weekSlots = useMemo(
-    () =>
-      candidateSlots.filter((slot) => slot.start >= weekStartDate && slot.start < weekEndDate),
+    () => candidateSlots.filter((slot) => slot.start >= weekStartDate && slot.start < weekEndDate),
     [candidateSlots, weekEndDate, weekStartDate],
   );
   const visibleWindow = useMemo(() => getSmartTsudoiVisibleWindow(weekSlots), [weekSlots]);
@@ -171,7 +178,7 @@ export function TsudoiWeeklyResponseGrid({
           'HH:mm',
         )}. Press to cycle to ${nextResponseStatus(current)}.`}
         title={content.pressToSelect}
-        className="h-full min-h-[32px] w-full rounded-none border border-transparent text-lg font-semibold text-slate-700 hover:bg-slate-50"
+        className={`h-full min-h-[32px] w-full rounded-none border text-lg font-semibold ${RESPONSE_CELL_CLASSES[current]}`}
         onClick={() => updateResponse(key)}
       >
         {mark}
@@ -211,4 +218,3 @@ export function TsudoiWeeklyResponseGrid({
     </div>
   );
 }
-

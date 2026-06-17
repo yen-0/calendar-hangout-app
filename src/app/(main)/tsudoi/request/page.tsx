@@ -8,8 +8,6 @@ import { ShareLinkPanel } from '@/components/hangouts/ShareLinkPanel';
 import { TsudoiRequestEditor } from '@/components/tsudoi/TsudoiRequestEditor';
 import { showErrorToast, showSuccessToast } from '@/lib/toasts';
 import { useCreateHangoutRequest } from '@/lib/queries/hangoutRequests';
-import { fetchCalendarItems } from '@/lib/firebase/firestoreService';
-import { prepareCreatorEventsForRequest } from '@/utils/hangoutUtils';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -98,13 +96,6 @@ function TsudoiRequestCreatePageInner() {
 
       setIsSaving(true);
       try {
-        const userEvents = isPublicSession ? [] : await fetchCalendarItems(user.uid);
-        const creatorEvents = prepareCreatorEventsForRequest(
-          userEvents,
-          formData.dateRanges,
-          formData.timeRanges,
-          formData.candidateSlots ?? [],
-        );
         const creatorName = isPublicSession
           ? trimmedOrganizerName
           : user.displayName || user.email || 'Anonymous User';
@@ -117,7 +108,6 @@ function TsudoiRequestCreatePageInner() {
           creatorUid: user.uid,
           creatorName,
           formData,
-          creatorEvents,
         });
         setCreatedRequestId(id);
         showSuccessToast(content.success);

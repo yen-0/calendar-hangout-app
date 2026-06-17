@@ -9,12 +9,7 @@ import {
   fetchHangoutRequestsForUser,
   updateHangoutRequestDetails,
 } from '@/lib/firebase/firestoreService';
-import {
-  HangoutRequest,
-  HangoutRequestFormData,
-  ParticipantDataClient,
-  ParticipantEventClient,
-} from '@/types/hangouts';
+import { HangoutRequest, HangoutRequestFormData, ParticipantDataClient } from '@/types/hangouts';
 import { queryKeys } from './keys';
 
 export function useHangoutRequestsForUser(userId: string | undefined) {
@@ -42,14 +37,12 @@ export function useCreateHangoutRequest() {
       creatorUid: string;
       creatorName: string;
       formData: HangoutRequestFormData;
-      creatorEvents: ParticipantEventClient[];
       recipientUids?: string[];
     }) =>
       createHangoutRequest(
         args.creatorUid,
         args.creatorName,
         args.formData,
-        args.creatorEvents,
         args.recipientUids ?? [],
       ),
     onSuccess: (_id, vars) =>
