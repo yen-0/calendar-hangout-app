@@ -80,7 +80,9 @@ describe('TsudoiRequestEditor', () => {
 
     expect(screen.getByRole('button', { name: 'Select all cells for 08:00' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Select all cells for 11:00' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Select all cells for 12:00' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Select all cells for 12:00' }),
+    ).not.toBeInTheDocument();
   });
 
   it('grays out and disables past slots while keeping future slots selectable', () => {
@@ -135,6 +137,69 @@ describe('TsudoiRequestEditor', () => {
     expect(screen.getByRole('button', { name: 'Sun 5/31 09:00 to 10:00' })).toHaveAttribute(
       'aria-pressed',
       'true',
+    );
+  });
+
+  it('selects the whole date column when a date header is clicked', () => {
+    render(
+      <TsudoiRequestEditor
+        mode="create"
+        initialData={{
+          weekStartDate: new Date('2026-05-27T10:30:00'),
+        }}
+        onSave={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select all candidate slots for Thu 5/28' }),
+    );
+
+    expect(screen.getByRole('button', { name: 'Thu 5/28 09:00 to 10:00' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Thu 5/28 17:00 to 18:00' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Fri 5/29 09:00 to 10:00' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('selects and clears every visible future cell with the bulk button', () => {
+    render(
+      <TsudoiRequestEditor
+        mode="create"
+        initialData={{
+          weekStartDate: new Date('2026-05-27T10:30:00'),
+        }}
+        onSave={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select all visible' }));
+
+    expect(screen.getByRole('button', { name: 'Mon 5/25 09:00 to 10:00' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByRole('button', { name: 'Thu 5/28 09:00 to 10:00' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Sun 5/31 17:00 to 18:00' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all visible' }));
+
+    expect(screen.getByRole('button', { name: 'Thu 5/28 09:00 to 10:00' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
     );
   });
 

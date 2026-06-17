@@ -3,9 +3,9 @@
 import { ReactNode } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/hooks/useLanguage';
 import { TsudoiGridRow, TsudoiTimeGridRow } from '@/utils/tsudoiGridUtils';
 import { TsudoiWeekDay } from '@/utils/tsudoiWeekUtils';
-import { useLanguage } from '@/hooks/useLanguage';
 
 interface Props {
   weekDays: TsudoiWeekDay[];
@@ -13,7 +13,7 @@ interface Props {
   onPreviousWeek: () => void;
   onNextWeek: () => void;
   onTimeLabelClick?: (row: TsudoiTimeGridRow) => void;
-  onDayLabelClick?: (dayLabel: string) => void;
+  onDayLabelClick?: (day: TsudoiWeekDay) => void;
   renderCell: (day: TsudoiWeekDay, row: TsudoiTimeGridRow) => ReactNode;
   timeHeaderContent?: ReactNode;
 }
@@ -86,7 +86,7 @@ export function TsudoiWeeklyGridTable({
               {onDayLabelClick ? (
                 <button
                   type="button"
-                  onClick={() => onDayLabelClick(day.label)}
+                  onClick={() => onDayLabelClick(day)}
                   aria-label={content.selectDay(day.label)}
                   className="flex min-w-0 flex-1 items-center justify-center rounded px-1 py-1 text-center text-xs font-semibold uppercase tracking-wide text-slate-600 transition hover:bg-slate-200/70"
                 >

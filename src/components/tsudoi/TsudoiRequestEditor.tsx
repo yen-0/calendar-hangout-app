@@ -22,9 +22,10 @@ import {
   buildTsudoiWeekDays,
   getTsudoiWeekStart,
   isTsudoiSlotInPast,
+  TsudoiWeekDay,
 } from '@/utils/tsudoiWeekUtils';
-import { TsudoiWeeklyGridTable } from './TsudoiWeeklyGridTable';
 import { TsudoiVisibleWindowControl } from './TsudoiVisibleWindowControl';
+import { TsudoiWeeklyGridTable } from './TsudoiWeeklyGridTable';
 
 interface Props {
   mode: 'create' | 'edit';
@@ -46,14 +47,16 @@ const copy = {
     cellDuration: '1マスの長さ（時間）',
     cellDurationHelp: '15分刻みで入力できます。小数でも選べます。',
     desiredMemberCount: '希望人数',
-    desiredMemberCountHelp: '未入力なら、回答を見てから人数の判断ができます。',
+    desiredMemberCountHelp: '未入力なら、回答を見てから人数を判断できます。',
     gridTitle: '候補グリッド',
-    gridHelp: '時間ラベルを押すと、その行を一括で選択できます。',
+    gridHelp:
+      '日付見出しで列全体、時間ラベルで行全体を選択できます。表示中の未来の候補はまとめて選択できます。',
     windowTitle: '表示範囲',
     windowDescription: '週グリッドに表示する時間帯を調整します。',
     selectedCount: (count: number) => `${count} 個を選択中`,
-    visibleRange: '表示中の範囲',
-    futureOnly: '未来の候補を 1 つ以上選んでください。',
+    futureOnly: '未来の候補を1つ以上選んでください。',
+    selectAll: '表示中をすべて選択',
+    clearAll: '表示中をすべて解除',
     create: '調整を作成',
     update: '調整を更新',
     cancel: 'キャンセル',
@@ -68,12 +71,14 @@ const copy = {
     desiredMemberCount: 'Desired member count',
     desiredMemberCountHelp: 'Leave blank if you want to decide after replies come in.',
     gridTitle: 'Candidate grid',
-    gridHelp: 'Click a time label to select that entire row.',
+    gridHelp:
+      'Click a date header to select that whole column, or a time label to select that whole row. You can also select every visible future slot at once.',
     windowTitle: 'Visible time range',
     windowDescription: 'Adjust how much of the weekly grid stays visible.',
     selectedCount: (count: number) => `${count} selected`,
-    visibleRange: 'Current preview',
     futureOnly: 'Select at least one future candidate cell.',
+    selectAll: 'Select all visible',
+    clearAll: 'Clear all visible',
     create: 'Create request',
     update: 'Update request',
     cancel: 'Cancel',
@@ -152,6 +157,38 @@ export function TsudoiRequestEditor({
     setWeekStartDate((current) => getTsudoiWeekStart(addWeeks(current, weeks)));
   };
 
+  const getSelectableKeys = (filterDay?: TsudoiWeekDay) => {
+    const days = filterDay ? [filterDay] : weekDays;
+    const keys: string[] = [];
+
+    for (const row of rows) {
+      const rowIndex = getTsudoiRowIndexFromMinutes(row.startMinutes, gridStepMinutes);
+      for (const day of days) {
+        const cellStart = getTsudoiCellStart(day.date, rowIndex, gridStepMinutes);
+        if (!isTsudoiSlotInPast(cellStart, now)) {
+          keys.push(getTsudoiCellKey(day.date, rowIndex));
+        }
+      }
+    }
+
+    return keys;
+  };
+
+  const toggleKeys = (keys: string[]) => {
+    if (keys.length === 0) return;
+
+    setSelectedCells((prev) => {
+      const allSelected = keys.every((key) => prev.has(key));
+      const next = new Set(prev);
+      if (allSelected) {
+        keys.forEach((key) => next.delete(key));
+      } else {
+        keys.forEach((key) => next.add(key));
+      }
+      return next;
+    });
+  };
+
   const previewSlots = useMemo(() => {
     const slots: CandidateSlotClient[] = [];
     for (const cell of selectedCells) {
@@ -166,6 +203,11 @@ export function TsudoiRequestEditor({
     () => previewSlots.filter((slot) => !isTsudoiSlotInPast(slot.start, now)),
     [now, previewSlots],
   );
+
+  const visibleSelectableKeys = getSelectableKeys();
+  const allVisibleSelected =
+    visibleSelectableKeys.length > 0 &&
+    visibleSelectableKeys.every((key) => selectedCells.has(key));
 
   const toggleCell = (dayDate: Date, row: TsudoiTimeGridRow) => {
     const rowIndex = getTsudoiRowIndexFromMinutes(row.startMinutes, gridStepMinutes);
@@ -183,24 +225,22 @@ export function TsudoiRequestEditor({
 
   const toggleRow = (row: TsudoiTimeGridRow) => {
     const rowIndex = getTsudoiRowIndexFromMinutes(row.startMinutes, gridStepMinutes);
-    const keys = weekDays.map((day) => getTsudoiCellKey(day.date, rowIndex));
-    const selectableKeys = keys.filter((key) => {
-      const { date, rowIndex: parsedRowIndex } = parseTsudoiCellKey(key);
-      return !isTsudoiSlotInPast(getTsudoiCellStart(date, parsedRowIndex, gridStepMinutes), now);
-    });
+    const keys = weekDays
+      .map((day) => {
+        const cellStart = getTsudoiCellStart(day.date, rowIndex, gridStepMinutes);
+        return isTsudoiSlotInPast(cellStart, now) ? null : getTsudoiCellKey(day.date, rowIndex);
+      })
+      .filter((key): key is string => !!key);
 
-    if (selectableKeys.length === 0) return;
+    toggleKeys(keys);
+  };
 
-    setSelectedCells((prev) => {
-      const allSelected = selectableKeys.every((key) => prev.has(key));
-      const next = new Set(prev);
-      if (allSelected) {
-        selectableKeys.forEach((key) => next.delete(key));
-      } else {
-        selectableKeys.forEach((key) => next.add(key));
-      }
-      return next;
-    });
+  const toggleDay = (day: TsudoiWeekDay) => {
+    toggleKeys(getSelectableKeys(day));
+  };
+
+  const toggleAllVisible = () => {
+    toggleKeys(visibleSelectableKeys);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -312,7 +352,16 @@ export function TsudoiRequestEditor({
             <p className="text-sm font-semibold text-slate-800">{content.gridTitle}</p>
             <p className="text-xs text-slate-500">{content.gridHelp}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={toggleAllVisible}
+              disabled={visibleSelectableKeys.length === 0}
+            >
+              {allVisibleSelected ? content.clearAll : content.selectAll}
+            </Button>
             <TsudoiVisibleWindowControl
               visibleWindow={visibleWindow}
               gridStepMinutes={gridStepMinutes}
@@ -330,6 +379,7 @@ export function TsudoiRequestEditor({
           onPreviousWeek={() => moveWeek(-1)}
           onNextWeek={() => moveWeek(1)}
           onTimeLabelClick={toggleRow}
+          onDayLabelClick={toggleDay}
           renderCell={renderCell}
         />
       </div>

@@ -56,19 +56,22 @@ describe('TsudoiWeeklyResponseGrid', () => {
 
     const cell = screen.getByRole('button', { name: /Thu, May 28 09:00/ });
     const initialMark = cell.textContent;
+    expect(cell).toHaveClass('bg-emerald-100');
 
     fireEvent.click(cell);
-    expect(screen.getByRole('button', { name: /Thu, May 28 09:00/ }).textContent).not.toBe(
-      initialMark,
-    );
+    const maybeCell = screen.getByRole('button', { name: /Thu, May 28 09:00/ });
+    expect(maybeCell.textContent).not.toBe(initialMark);
+    expect(maybeCell).toHaveClass('bg-amber-100');
 
-    fireEvent.click(screen.getByRole('button', { name: /Thu, May 28 09:00/ }));
-    expect(screen.getByRole('button', { name: /Thu, May 28 09:00/ }).textContent).not.toBe(
-      initialMark,
-    );
+    fireEvent.click(maybeCell);
+    const noCell = screen.getByRole('button', { name: /Thu, May 28 09:00/ });
+    expect(noCell.textContent).not.toBe(initialMark);
+    expect(noCell).toHaveClass('bg-rose-100');
 
-    fireEvent.click(screen.getByRole('button', { name: /Thu, May 28 09:00/ }));
-    expect(screen.getByRole('button', { name: /Thu, May 28 09:00/ }).textContent).toBe(initialMark);
+    fireEvent.click(noCell);
+    const yesCell = screen.getByRole('button', { name: /Thu, May 28 09:00/ });
+    expect(yesCell.textContent).toBe(initialMark);
+    expect(yesCell).toHaveClass('bg-emerald-100');
   });
 
   it('selects all candidate slots for a day when the day header is clicked', async () => {

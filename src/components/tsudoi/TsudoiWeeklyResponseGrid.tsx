@@ -1,8 +1,7 @@
 'use client';
 
-import { addWeeks, differenceInMinutes, format } from 'date-fns';
+import { addWeeks, differenceInMinutes, format, isSameDay } from 'date-fns';
 import { useMemo, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
 import { CandidateSlotClient, SlotResponseStatus } from '@/types/hangouts';
 import { candidateSlotKey } from '@/utils/hangoutUtils';
@@ -16,9 +15,9 @@ import {
   TsudoiTimeGridRow,
   TsudoiVisibleWindow,
 } from '@/utils/tsudoiGridUtils';
-import { buildTsudoiWeekDays, getTsudoiWeekStart } from '@/utils/tsudoiWeekUtils';
-import { TsudoiWeeklyGridTable } from './TsudoiWeeklyGridTable';
+import { buildTsudoiWeekDays, getTsudoiWeekStart, TsudoiWeekDay } from '@/utils/tsudoiWeekUtils';
 import { TsudoiVisibleWindowControl } from './TsudoiVisibleWindowControl';
+import { TsudoiWeeklyGridTable } from './TsudoiWeeklyGridTable';
 
 interface Props {
   candidateSlots: CandidateSlotClient[];
@@ -42,17 +41,14 @@ const RESPONSE_CELL_CLASSES: Record<SlotResponseStatus, string> = {
 
 const copy = {
   ja: {
-    instructions:
-      '\u5019\u88dc\u30bb\u30eb\u3092\u62bc\u3059\u3068\u3001\u25cb\u3001\u25b3\u3001\u00d7 \u306e\u9806\u3067\u5207\u308a\u66ff\u308f\u308a\u307e\u3059\u3002',
-    dayHeader:
-      '\u65e5\u4ed8\u898b\u51fa\u3057\u3092\u62bc\u3059\u3068\u3001\u305d\u306e\u65e5\u306e\u5019\u88dc\u3092\u307e\u3068\u3081\u3066\u9078\u629e\u3067\u304d\u307e\u3059\u3002',
-    rowHeader:
-      '\u6642\u523b\u898b\u51fa\u3057\u3092\u62bc\u3059\u3068\u3001\u305d\u306e\u6642\u523b\u306e\u5019\u88dc\u3092\u307e\u3068\u3081\u3066\u9078\u629e\u3067\u304d\u307e\u3059\u3002',
-    legend: '\u25cb = \u53c2\u52a0\u53ef, \u25b3 = \u672a\u5b9a, \u00d7 = \u53c2\u52a0\u4e0d\u53ef',
-    visibleWindowTitle: '\u8868\u793a\u7bc4\u56f2',
+    instructions: '候補セルを押すと、○、△、× の順で切り替わります。',
+    dayHeader: '日付見出しを押すと、その日の候補をまとめて選択できます。',
+    rowHeader: '時刻見出しを押すと、その時刻の候補をまとめて選択できます。',
+    legend: '○ = 参加可, △ = 未定, × = 参加不可',
+    visibleWindowTitle: '表示範囲',
     visibleWindowDescription:
-      '\u9031\u306e\u56de\u7b54\u30b0\u30ea\u30c3\u30c9\u306b\u8868\u793a\u3059\u308b\u6642\u9593\u5e2f\u3092\u5207\u308a\u66ff\u3048\u307e\u3059\u3002\u6642\u9593\u3092\u7d5e\u308b\u3068\u898b\u3084\u3059\u304f\u3001\u5e83\u3052\u308b\u3068\u4e00\u65e5\u5168\u4f53\u3092\u78ba\u8a8d\u3057\u3084\u3059\u304f\u306a\u308a\u307e\u3059\u3002',
-    pressToSelect: '\u9078\u629e\u3059\u308b\u306b\u306f\u62bc\u3057\u3066\u304f\u3060\u3055\u3044',
+      '週の回答グリッドに表示する時間帯を切り替えます。時間を絞ると見やすく、広げると一日全体を確認しやすくなります。',
+    pressToSelect: '選択するには押してください',
     noCandidates: 'この Tsudoi には候補時間がありません。',
   },
   en: {
@@ -82,7 +78,7 @@ export function TsudoiWeeklyResponseGrid({
   onChange,
 }: Props) {
   const { language } = useLanguage();
-  const content = copy[language];
+  const content = copy[language] ?? copy.en;
   const initialWeekStartDate = useMemo(() => {
     if (candidateSlots.length === 0) return getTsudoiWeekStart(new Date());
     const earliestSlot = candidateSlots.reduce(
@@ -160,8 +156,8 @@ export function TsudoiWeeklyResponseGrid({
     onChange(nextResponses);
   };
 
-  const selectDay = (dayLabel: string) => {
-    const daySlots = weekSlots.filter((slot) => format(slot.start, 'EEE M/d') === dayLabel);
+  const selectDay = (day: TsudoiWeekDay) => {
+    const daySlots = weekSlots.filter((slot) => isSameDay(slot.start, day.date));
     updateSlotGroup(daySlots);
   };
 
@@ -198,21 +194,19 @@ export function TsudoiWeeklyResponseGrid({
     const mark = RESPONSE_MARKS[current];
 
     return (
-      <Button
+      <button
         type="button"
-        variant="outline"
-        size="sm"
         disabled={isLoading || readOnly}
         aria-label={`${format(slotStart, 'EEE, MMM d HH:mm')} to ${format(
           slotEnd,
           'HH:mm',
         )}. Press to cycle to ${nextResponseStatus(current)}.`}
         title={content.pressToSelect}
-        className={`h-full min-h-[32px] w-full rounded-none border text-lg font-semibold ${RESPONSE_CELL_CLASSES[current]}`}
+        className={`flex h-full min-h-[32px] w-full items-center justify-center border text-lg font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${RESPONSE_CELL_CLASSES[current]}`}
         onClick={() => updateResponse(responseKey)}
       >
         {mark}
-      </Button>
+      </button>
     );
   };
 
