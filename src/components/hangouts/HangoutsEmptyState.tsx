@@ -9,8 +9,8 @@ interface Props {
 
 const copy = {
   ja: {
-    message: 'まだ公開調整はありません。',
-    action: '最初の調整を作る',
+    message: 'まだ公開リクエストはありません。',
+    action: '最初のリクエストを作成',
   },
   en: {
     message: 'No public requests yet.',
@@ -20,7 +20,7 @@ const copy = {
 
 export function HangoutsEmptyState({ onCreate }: Props) {
   const { language } = useLanguage();
-  const content = copy[language];
+  const content = copy[language] ?? copy.en;
 
   return (
     <div className="rounded-[1.5rem] border border-dashed border-slate-300 bg-white px-6 py-12 text-center shadow-sm">
@@ -39,7 +39,10 @@ export function HangoutsEmptyState({ onCreate }: Props) {
         />
       </svg>
       <p className="text-slate-600">{content.message}</p>
-      <Button onClick={onCreate} className="mt-5 rounded-full bg-slate-950 text-white hover:bg-slate-800">
+      <Button
+        onClick={onCreate}
+        className="mt-5 rounded-full bg-slate-950 text-white hover:bg-slate-800"
+      >
         {content.action}
       </Button>
     </div>

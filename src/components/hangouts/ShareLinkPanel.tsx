@@ -13,10 +13,10 @@ interface Props {
 const copy = {
   ja: {
     title: '候補リンクを共有',
-    body: 'このリンクを参加者に送ると、空き時間の回答を集められます。',
+    body: 'このリンクを参加者に送ると、すぐに回答を集められます。',
     copy: 'リンクをコピー',
     copied: 'リンクをコピーしました。',
-    clipboardError: 'このブラウザではクリップボードを使えません。',
+    clipboardError: 'このブラウザではクリップボードを使用できません。',
     copyError: 'リンクのコピーに失敗しました。',
   },
   en: {
@@ -30,9 +30,10 @@ const copy = {
 } as const;
 
 export function ShareLinkPanel({ requestId }: Props) {
-  const link = typeof window !== 'undefined' ? `${window.location.origin}/tsudoi/reply/${requestId}` : '';
+  const link =
+    typeof window !== 'undefined' ? `${window.location.origin}/tsudoi/reply/${requestId}` : '';
   const { language } = useLanguage();
-  const content = copy[language];
+  const content = copy[language] ?? copy.en;
 
   const copyLink = useCallback(() => {
     if (!link) return;
@@ -52,7 +53,11 @@ export function ShareLinkPanel({ requestId }: Props) {
       <p className="mt-1 text-sm text-cyan-800/80">{content.body}</p>
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         <Input type="text" readOnly value={link} className="bg-white" />
-        <Button onClick={copyLink} variant="outline" className="border-cyan-200 bg-white text-cyan-800">
+        <Button
+          onClick={copyLink}
+          variant="outline"
+          className="border-cyan-200 bg-white text-cyan-800"
+        >
           {content.copy}
         </Button>
       </div>

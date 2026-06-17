@@ -14,9 +14,21 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { updateHangoutRequestDetails } from '@/lib/firebase/firestoreService';
 import { HangoutRequestFormData } from '@/types/hangouts';
 
+const copy = {
+  ja: {
+    title: 'リクエストを編集',
+    updateFailed: 'リクエストの更新に失敗しました。',
+  },
+  en: {
+    title: 'Edit request',
+    updateFailed: 'Failed to update request.',
+  },
+} as const;
+
 export default function TsudoiRequestEditPage() {
   const { user, loading: authLoading, ensurePublicSession } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const content = copy[language];
   const router = useRouter();
   const params = useParams();
   const requestId = params?.requestId as string | undefined;
@@ -41,7 +53,9 @@ export default function TsudoiRequestEditPage() {
     }
   }, [authLoading, request, router, user]);
 
-  const initialData = useMemo<Partial<HangoutRequestFormData> & { weekStartDate?: Date } | undefined>(() => {
+  const initialData = useMemo<
+    (Partial<HangoutRequestFormData> & { weekStartDate?: Date }) | undefined
+  >(() => {
     if (!request) return undefined;
     return {
       requestName: request.requestName,
@@ -85,12 +99,20 @@ export default function TsudoiRequestEditPage() {
         router.push('/tsudoi');
       } catch (error) {
         console.error('Failed to update Tsudoi request:', error);
-        showErrorToast(`Failed to update request. ${(error as Error).message}`);
+        showErrorToast(`${content.updateFailed} ${(error as Error).message}`);
       } finally {
         setIsSaving(false);
       }
     },
-    [isCreator, request, router, t.hangouts.requestUpdated, t.replyPage.onlyCreator, user],
+    [
+      content.updateFailed,
+      isCreator,
+      request,
+      router,
+      t.hangouts.requestUpdated,
+      t.replyPage.onlyCreator,
+      user,
+    ],
   );
 
   if (authLoading || isBootstrappingPublicSession || requestQuery.isLoading) {
@@ -106,7 +128,7 @@ export default function TsudoiRequestEditPage() {
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">Tsudoi</p>
-          <h1 className="text-3xl font-bold text-slate-900">Edit request</h1>
+          <h1 className="text-3xl font-bold text-slate-900">{content.title}</h1>
         </div>
         <Link href="/tsudoi">
           <Button variant="outline">{t.replyPage.backToList}</Button>

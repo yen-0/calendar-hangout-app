@@ -8,10 +8,13 @@ import {
 } from '../hangoutUtils';
 import { HangoutRequestClientState } from '@/types/hangouts';
 import { CalendarEvent } from '@/types/events';
+import {
+  getTsudoiCellKey,
+  getTsudoiGridStepMinutes,
+  getTsudoiRowIndexFromMinutes,
+} from '../tsudoiGridUtils';
 
-function makeRequest(
-  partial: Partial<HangoutRequestClientState> = {},
-): HangoutRequestClientState {
+function makeRequest(partial: Partial<HangoutRequestClientState> = {}): HangoutRequestClientState {
   return {
     id: 'req_1',
     creatorUid: 'creator',
@@ -290,7 +293,13 @@ describe('findCommonAvailability', () => {
     };
     const responses = deriveSlotResponsesFromEvents(
       [firstSlot, secondSlot],
-      [{ title: 'Busy', start: new Date('2026-05-20T10:10:00'), end: new Date('2026-05-20T10:20:00') }],
+      [
+        {
+          title: 'Busy',
+          start: new Date('2026-05-20T10:10:00'),
+          end: new Date('2026-05-20T10:20:00'),
+        },
+      ],
     );
 
     expect(responses[candidateSlotKey(firstSlot)]).toBe('no');
@@ -316,7 +325,13 @@ describe('findCommonAvailability', () => {
         uid: 'b',
         displayName: 'B',
         submittedAt: new Date(),
-        events: [{ title: 'busy', start: new Date('2026-05-20T10:05:00'), end: new Date('2026-05-20T10:20:00') }],
+        events: [
+          {
+            title: 'busy',
+            start: new Date('2026-05-20T10:05:00'),
+            end: new Date('2026-05-20T10:20:00'),
+          },
+        ],
       },
       c: {
         uid: 'c',
@@ -333,6 +348,32 @@ describe('findCommonAvailability', () => {
     expect(breakdown.yesCount).toBe(1);
     expect(breakdown.maybeCount).toBe(1);
     expect(breakdown.noCount).toBe(1);
+  });
+
+  it('honors legacy weekly grid response keys when scoring attendance', () => {
+    const slot = {
+      start: new Date('2026-05-20T10:00:00'),
+      end: new Date('2026-05-20T10:30:00'),
+    };
+    const stepMinutes = getTsudoiGridStepMinutes(30);
+    const rowIndex = getTsudoiRowIndexFromMinutes(10 * 60, stepMinutes);
+    const legacyResponseKey = getTsudoiCellKey(slot.start, rowIndex);
+
+    const breakdown = getSlotAttendanceBreakdown(slot, {
+      a: {
+        uid: 'a',
+        displayName: 'A',
+        submittedAt: new Date(),
+        events: [],
+        slotResponses: {
+          [legacyResponseKey]: 'no',
+        },
+      },
+    });
+
+    expect(breakdown.noParticipants.map((participant) => participant.uid)).toEqual(['a']);
+    expect(breakdown.noCount).toBe(1);
+    expect(breakdown.yesCount).toBe(0);
   });
 });
 

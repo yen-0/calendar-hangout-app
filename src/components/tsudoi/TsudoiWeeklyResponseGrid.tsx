@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
 import { CandidateSlotClient, SlotResponseStatus } from '@/types/hangouts';
+import { candidateSlotKey } from '@/utils/hangoutUtils';
 import {
   buildTsudoiWeekGridRows,
   getSmartTsudoiVisibleWindow,
@@ -45,20 +46,25 @@ const copy = {
       '\u5019\u88dc\u30bb\u30eb\u3092\u62bc\u3059\u3068\u3001\u25cb\u3001\u25b3\u3001\u00d7 \u306e\u9806\u3067\u5207\u308a\u66ff\u308f\u308a\u307e\u3059\u3002',
     dayHeader:
       '\u65e5\u4ed8\u898b\u51fa\u3057\u3092\u62bc\u3059\u3068\u3001\u305d\u306e\u65e5\u306e\u5019\u88dc\u3092\u307e\u3068\u3081\u3066\u9078\u629e\u3067\u304d\u307e\u3059\u3002',
+    rowHeader:
+      '\u6642\u523b\u898b\u51fa\u3057\u3092\u62bc\u3059\u3068\u3001\u305d\u306e\u6642\u523b\u306e\u5019\u88dc\u3092\u307e\u3068\u3081\u3066\u9078\u629e\u3067\u304d\u307e\u3059\u3002',
     legend: '\u25cb = \u53c2\u52a0\u53ef, \u25b3 = \u672a\u5b9a, \u00d7 = \u53c2\u52a0\u4e0d\u53ef',
     visibleWindowTitle: '\u8868\u793a\u7bc4\u56f2',
     visibleWindowDescription:
       '\u9031\u306e\u56de\u7b54\u30b0\u30ea\u30c3\u30c9\u306b\u8868\u793a\u3059\u308b\u6642\u9593\u5e2f\u3092\u5207\u308a\u66ff\u3048\u307e\u3059\u3002\u6642\u9593\u3092\u7d5e\u308b\u3068\u898b\u3084\u3059\u304f\u3001\u5e83\u3052\u308b\u3068\u4e00\u65e5\u5168\u4f53\u3092\u78ba\u8a8d\u3057\u3084\u3059\u304f\u306a\u308a\u307e\u3059\u3002',
     pressToSelect: '\u9078\u629e\u3059\u308b\u306b\u306f\u62bc\u3057\u3066\u304f\u3060\u3055\u3044',
+    noCandidates: 'この Tsudoi には候補時間がありません。',
   },
   en: {
     instructions: 'Press a candidate cell to cycle through circle, triangle, and cross.',
-    dayHeader: 'Press a day header to select all candidate slots for that day.',
+    dayHeader: 'Press a day header to switch that whole column.',
+    rowHeader: 'Press a time label to switch that whole row.',
     legend: '\u25cb = yes, \u25b3 = maybe, \u00d7 = no',
     visibleWindowTitle: 'Visible time range',
     visibleWindowDescription:
       'Change how much of the weekly response grid is shown. Narrow the range to focus on fewer hours, or expand it to review more of the day.',
     pressToSelect: 'Press to select',
+    noCandidates: 'No candidate slots are available for this Tsudoi.',
   },
 } as const;
 
@@ -129,26 +135,49 @@ export function TsudoiWeeklyResponseGrid({
     onChange({ ...responses, [slotKey]: nextResponseStatus(current) });
   };
 
-  const selectDay = (dayLabel: string) => {
-    if (readOnly || !onChange) return;
+  const getCurrentSlotResponse = (slot: CandidateSlotClient) => {
+    const responseKey = candidateSlotKey(slot);
+    const minutesFromMidnight = slot.start.getHours() * 60 + slot.start.getMinutes();
+    const rowIndex = getTsudoiRowIndexFromMinutes(minutesFromMidnight, gridStepMinutes);
+    const legacyKey = getTsudoiCellKey(slot.start, rowIndex);
+    return responses[responseKey] ?? responses[legacyKey] ?? 'yes';
+  };
 
-    const daySlots = weekSlots.filter((slot) => format(slot.start, 'EEE M/d') === dayLabel);
-    if (daySlots.length === 0) return;
+  const updateSlotGroup = (slots: CandidateSlotClient[]) => {
+    if (readOnly || !onChange || slots.length === 0) return;
 
+    const currentStatuses = slots.map(getCurrentSlotResponse);
+    const firstStatus = currentStatuses[0];
+    const nextStatus = currentStatuses.every((status) => status === firstStatus)
+      ? nextResponseStatus(firstStatus)
+      : 'yes';
     const nextResponses = { ...responses };
-    for (const slot of daySlots) {
-      const minutesFromMidnight = slot.start.getHours() * 60 + slot.start.getMinutes();
-      const rowIndex = getTsudoiRowIndexFromMinutes(minutesFromMidnight, gridStepMinutes);
-      nextResponses[getTsudoiCellKey(slot.start, rowIndex)] = 'yes';
+
+    for (const slot of slots) {
+      nextResponses[candidateSlotKey(slot)] = nextStatus;
     }
 
     onChange(nextResponses);
   };
 
+  const selectDay = (dayLabel: string) => {
+    const daySlots = weekSlots.filter((slot) => format(slot.start, 'EEE M/d') === dayLabel);
+    updateSlotGroup(daySlots);
+  };
+
+  const selectTimeRow = (row: TsudoiTimeGridRow) => {
+    const rowSlots = weekSlots.filter((slot) => {
+      const minutesFromMidnight = slot.start.getHours() * 60 + slot.start.getMinutes();
+      const rowIndex = getTsudoiRowIndexFromMinutes(minutesFromMidnight, gridStepMinutes);
+      return rowIndex === getTsudoiRowIndexFromMinutes(row.startMinutes, gridStepMinutes);
+    });
+    updateSlotGroup(rowSlots);
+  };
+
   if (candidateSlots.length === 0) {
     return (
       <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-        No candidate slots are available for this Tsudoi.
+        {content.noCandidates}
       </div>
     );
   }
@@ -157,12 +186,13 @@ export function TsudoiWeeklyResponseGrid({
     const rowIndex = getTsudoiRowIndexFromMinutes(row.startMinutes, gridStepMinutes);
     const key = getTsudoiCellKey(day.date, rowIndex);
     const slot = slotMap.get(key);
-    const current = responses[key] ?? 'yes';
 
     if (!slot) {
       return <div className="min-h-[32px] bg-white" />;
     }
 
+    const responseKey = candidateSlotKey(slot);
+    const current = responses[responseKey] ?? responses[key] ?? 'yes';
     const slotStart = getTsudoiCellStart(day.date, rowIndex, gridStepMinutes);
     const slotEnd = new Date(slotStart.getTime() + candidateDurationMinutes * 60_000);
     const mark = RESPONSE_MARKS[current];
@@ -179,7 +209,7 @@ export function TsudoiWeeklyResponseGrid({
         )}. Press to cycle to ${nextResponseStatus(current)}.`}
         title={content.pressToSelect}
         className={`h-full min-h-[32px] w-full rounded-none border text-lg font-semibold ${RESPONSE_CELL_CLASSES[current]}`}
-        onClick={() => updateResponse(key)}
+        onClick={() => updateResponse(responseKey)}
       >
         {mark}
       </Button>
@@ -191,6 +221,7 @@ export function TsudoiWeeklyResponseGrid({
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
         <span>{content.instructions}</span>
         <span>{content.dayHeader}</span>
+        <span>{content.rowHeader}</span>
         <span className="font-semibold text-slate-700">{content.legend}</span>
       </div>
 
@@ -204,6 +235,7 @@ export function TsudoiWeeklyResponseGrid({
           setWeekStartDate((current) => getTsudoiWeekStart(addWeeks(current, 1)));
         }}
         renderCell={renderCell}
+        onTimeLabelClick={selectTimeRow}
         onDayLabelClick={selectDay}
         timeHeaderContent={
           <TsudoiVisibleWindowControl

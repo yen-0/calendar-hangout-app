@@ -56,6 +56,8 @@ const copy = {
     futureOnly: '未来の候補を 1 つ以上選んでください。',
     create: '調整を作成',
     update: '調整を更新',
+    cancel: 'キャンセル',
+    notDecided: '未定',
   },
   en: {
     requestName: 'Request name',
@@ -74,6 +76,8 @@ const copy = {
     futureOnly: 'Select at least one future candidate cell.',
     create: 'Create request',
     update: 'Update request',
+    cancel: 'Cancel',
+    notDecided: 'Not decided',
   },
 } as const;
 
@@ -296,7 +300,7 @@ export function TsudoiRequestEditor({
             min="1"
             value={desiredMemberCount}
             onChange={(event) => setDesiredMemberCount(event.target.value)}
-            placeholder={language === 'ja' ? '未定' : 'Not decided'}
+            placeholder={content.notDecided}
           />
           <p className="text-xs text-slate-500">{content.desiredMemberCountHelp}</p>
         </div>
@@ -333,7 +337,7 @@ export function TsudoiRequestEditor({
       <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-4 md:flex-row md:justify-end">
         {onCancel && (
           <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
-            Cancel
+            {content.cancel}
           </Button>
         )}
         <Button

@@ -163,7 +163,8 @@ const ja = {
     failedSaveStamp: 'スタンプの保存に失敗しました。',
     couldNotUndoPlacement: '配置を元に戻せませんでした。',
     failedToApplyStamp: 'スタンプの適用に失敗しました。',
-    failedToPlaceCount: (failed: number, total: number) => `${total} 件中 ${failed} 件の配置に失敗しました。`,
+    failedToPlaceCount: (failed: number, total: number) =>
+      `${total} 件中 ${failed} 件の配置に失敗しました。`,
     couldNotUndoPlacements: (failed: number) => `${failed} 件の配置を元に戻せませんでした。`,
     undone: '元に戻しました。',
     eventDeleted: '予定を削除しました！',
@@ -175,7 +176,8 @@ const ja = {
     addedPreset: (emoji: string, title: string) => `追加しました: ${emoji} ${title}`,
     couldNotAddPreset: 'プリセットを追加できませんでした。',
     placedSingle: (emoji: string, title: string) => `配置しました: ${emoji} ${title}`,
-    placedMany: (count: number, emoji: string, title: string) => `${count} 件配置しました: ${emoji} ${title}`,
+    placedMany: (count: number, emoji: string, title: string) =>
+      `${count} 件配置しました: ${emoji} ${title}`,
     confirmDeletionTitle: '削除の確認',
     confirmDeletionMessage: 'この予定を削除しますか？',
     confirmDeletionConfirm: '削除',
@@ -201,7 +203,8 @@ const ja = {
     myRequests: '自分のツドイリクエスト',
     publicRequests: '公開の日程調整',
     publicRequestsIntroTitle: 'アカウントなしで作成できます',
-    publicRequestsIntroBody: 'このページでは一時的な公開セッションを使って、リンク共有だけで参加者を集められます。',
+    publicRequestsIntroBody:
+      'このページでは一時的な公開セッションを使って、リンク共有だけで参加者を集められます。',
     createNewRequest: '+ 新しいリクエストを作成',
     createDialog: '新しいツドイリクエストを作成',
     editDialog: 'ツドイリクエストを編集',
@@ -220,7 +223,14 @@ const ja = {
     emptyState: 'まだツドイリクエストは作成されていません。',
     copyShareLink: '共有リンクをコピー',
     status: '状態',
+    statusOpen: '受付中',
+    statusUpdating: '集計中',
+    statusResultsReady: '結果あり',
+    statusNoSlots: '候補なし',
+    statusConfirmed: '確定済み',
+    statusClosed: '終了',
     participants: '参加者',
+    targetNotDecided: '（目標人数未設定）',
     created: '作成日',
     archiveDone: '完了としてアーカイブ',
     closeRequest: 'リクエストを閉じる',
@@ -230,7 +240,8 @@ const ja = {
     shareThisLink: '参加可能時間を集めるには、このリンクを共有してください：',
     publicOrganizer: '公開主催者',
     closeRequestConfirm: (name: string) => `リクエスト「${name}」を閉じますか？`,
-    deleteRequestConfirm: (name: string) => `リクエスト「${name}」を削除しますか？ これは元に戻せません。`,
+    deleteRequestConfirm: (name: string) =>
+      `リクエスト「${name}」を削除しますか？ これは元に戻せません。`,
   },
   notifications: {
     title: '通知',
@@ -306,7 +317,8 @@ const ja = {
     startWithPreset: 'まずはこの中から選ぶか、自分で作成してください。',
     dragHint: 'スタンプをカレンダーにドラッグするか、タップしてから日付を押して配置します。',
     noMatchesQuery: (query: string) => `「${query}」に一致するスタンプはありません。`,
-    selectedTooltip: (title: string) => `「${title}」が選択されています。日付をクリックすると配置します。`,
+    selectedTooltip: (title: string) =>
+      `「${title}」が選択されています。日付をクリックすると配置します。`,
     unselectedTooltip: (title: string) => `「${title}」を選択してカレンダーに配置します。`,
     placedStats: (total: number, thisMonth: number) =>
       `${total} 回配置済み${thisMonth > 0 ? ` · 今月 ${thisMonth} 回` : ''}`,
@@ -359,7 +371,8 @@ const ja = {
   friends: {
     loadingFriends: '友だちを読み込み中…',
     title: '友だち',
-    signInPrompt: 'ユーザーを検索したり、友だちとつながったり、直接ツドイを送るにはサインインしてください。',
+    signInPrompt:
+      'ユーザーを検索したり、友だちとつながったり、直接ツドイを送るにはサインインしてください。',
     signIn: 'サインイン',
     searchDescription: 'ユーザーを検索し、リクエストを管理して、友だちに直接ツドイを送れます。',
     searchPlaceholder: '名前またはメールで検索',
@@ -406,7 +419,8 @@ const ja = {
     couldNotLoad: 'このパックを読み込めませんでした。',
     signInToImport: 'パックをインポートするにはサインインしてください。',
     importedAll: (count: number) => `${count} 件のスタンプをインポートしました。`,
-    importedSome: (imported: number, total: number) => `${total} 件中 ${imported} 件をインポートしました。`,
+    importedSome: (imported: number, total: number) =>
+      `${total} 件中 ${imported} 件をインポートしました。`,
     couldNotImport: 'パックをインポートできませんでした。',
     loading: '読み込み中…',
     title: 'スタンプパック',
@@ -423,10 +437,12 @@ const ja = {
     requestNotFound: 'ツドイリクエストが見つからないか、アクセス権がありません。',
     couldNotLoadDetails: 'ツドイリクエストの詳細を読み込めませんでした。',
     failedToLoadDetails: 'リクエストの読み込みに失敗しました。',
-    notLoggedInOrNotLoaded: 'ユーザーがログインしていないか、リクエストがまだ読み込まれていません。',
+    notLoggedInOrNotLoaded:
+      'ユーザーがログインしていないか、リクエストがまだ読み込まれていません。',
     publicSessionFailed: '公開セッションを開始できませんでした。',
     publicSessionRequired: '公開セッションが必要です。',
-    publicSessionRequiredBody: 'このページはアカウントなしでも使えます。少し待ってから再読み込みしてください。',
+    publicSessionRequiredBody:
+      'このページはアカウントなしでも使えます。少し待ってから再読み込みしてください。',
     availabilitySubmitted: '参加可能時間を送信しました！',
     failedToSubmitAvailability: '参加可能時間を送信できませんでした。',
     requestDataNotLoaded: 'リクエストデータが読み込まれていません。',
@@ -441,7 +457,8 @@ const ja = {
     missingConfirmData: 'スロット確定に必要な重要データが不足しています。',
     eventAddedToCalendar: '確定イベントをあなたのカレンダーに追加しました。',
     couldNotAddToOwnCalendar: '自分のカレンダーへ自動追加できませんでした。',
-    slotConfirmed: (dateText: string) => `スロットを確定しました: ${dateText}。招待を送信しました。`,
+    slotConfirmed: (dateText: string) =>
+      `スロットを確定しました: ${dateText}。招待を送信しました。`,
     wroteEventToCalendars: (written: number, skipped: number, errored: number) =>
       `Google カレンダーに ${written} 件書き込みました${skipped > 0 ? `（未接続 ${skipped} 件）` : ''}${errored > 0 ? `（失敗 ${errored} 件）` : ''}`,
     noParticipantsConnected: 'まだ Google カレンダーに接続している参加者はいません。',
@@ -467,21 +484,25 @@ const ja = {
     busyEnd: '終了',
     busyBlockInvalid: '忙しい時間には、日付と有効な開始/終了時刻が必要です。',
     busyBlockTitle: '忙しい時間',
-    publicWriteBackSkipped: 'このリクエストは公開セッションで作成されました。確定イベントのカレンダー書き戻しは、サインイン済みの作成者のみ利用できます。',
+    publicWriteBackSkipped:
+      'このリクエストは公開セッションで作成されました。確定イベントのカレンダー書き戻しは、サインイン済みの作成者のみ利用できます。',
     submitAvailability: '参加可能時間を送信',
     updateAvailability: '参加可能時間を更新',
     signInToParticipate: '参加するにはサインイン',
-    signInToParticipateBody: '参加可能時間を送信したり、このツドイに参加するにはサインインしてください。',
-    findCommonSlots: 'Live results',
-    viewCalculatedSlots: 'View detailed results',
-    noSlotsBasedOnLatest: 'No common slots were found from the current responses.',
-    calculating: 'Updating…',
-    recalculateCommonTimes: 'Refresh results',
-    calculateNow: 'Show results now',
-    waitingForMoreParticipants: (remaining: number) => `Results will improve once ${remaining} more people respond.`,
+    signInToParticipateBody:
+      '参加可能時間を送信したり、このツドイに参加するにはサインインしてください。',
+    findCommonSlots: 'ライブ結果',
+    viewCalculatedSlots: '詳細結果を見る',
+    noSlotsBasedOnLatest: '現在の回答では共通候補が見つかりませんでした。',
+    calculating: '更新中…',
+    recalculateCommonTimes: '結果を更新',
+    calculateNow: '結果を見る',
+    waitingForMoreParticipants: (remaining: number) =>
+      `あと ${remaining} 人が回答すると、結果の精度が上がります。`,
     backToList: 'ツドイ一覧に戻る',
     confirmTitle: '招待を確定して送信',
-    confirmMessage: 'このスロットを確定し、参加可能な全員に招待を送信しますか？この操作は元に戻せません。',
+    confirmMessage:
+      'このスロットを確定し、参加可能な全員に招待を送信しますか？この操作は元に戻せません。',
     confirmYes: 'はい、確定して招待を送る',
     confirmCancel: 'キャンセル',
   },
@@ -529,18 +550,55 @@ export const translations = {
       finalDescription:
         'Tsudoi is free while in beta. Sign in with Google, paint your week, and send your first hangout link in under five minutes.',
       features: [
-        { emoji: '📆', title: 'No more “does Tuesday work?”', body: 'Tsudoi already sees your Google Calendar, so it can suggest slots where everyone is actually free.' },
-        { emoji: '⚡', title: 'Stamp in your week in seconds', body: 'Create reusable stamps for work, class, or gym and drag them onto the calendar.' },
-        { emoji: '✅', title: 'Confirmed time writes itself back', body: 'Pick a time everyone agreed on and Tsudoi drops the confirmed event onto each connected Google Calendar automatically.' },
-        { emoji: '🔗', title: 'Google Calendar bridge', body: 'Sign in with Google and Tsudoi pulls in your existing events as conflict data.' },
-        { emoji: '🎯', title: 'Stamps are your shortcut', body: 'Reusable colored stamps for routines let you fill a whole week with one drag.' },
-        { emoji: '🗓️', title: 'Tsudoi polls that find common slots', body: 'Share candidate times and let everyone answer with circle, triangle, or cross.' },
-        { emoji: '🚶', title: 'Tokyo travel buffers (beta)', body: 'Attach a location to events in Greater Tokyo and Tsudoi estimates the travel time between them.' },
+        {
+          emoji: '📆',
+          title: 'No more “does Tuesday work?”',
+          body: 'Tsudoi already sees your Google Calendar, so it can suggest slots where everyone is actually free.',
+        },
+        {
+          emoji: '⚡',
+          title: 'Stamp in your week in seconds',
+          body: 'Create reusable stamps for work, class, or gym and drag them onto the calendar.',
+        },
+        {
+          emoji: '✅',
+          title: 'Confirmed time writes itself back',
+          body: 'Pick a time everyone agreed on and Tsudoi drops the confirmed event onto each connected Google Calendar automatically.',
+        },
+        {
+          emoji: '🔗',
+          title: 'Google Calendar bridge',
+          body: 'Sign in with Google and Tsudoi pulls in your existing events as conflict data.',
+        },
+        {
+          emoji: '🎯',
+          title: 'Stamps are your shortcut',
+          body: 'Reusable colored stamps for routines let you fill a whole week with one drag.',
+        },
+        {
+          emoji: '🗓️',
+          title: 'Tsudoi polls that find common slots',
+          body: 'Share candidate times and let everyone answer with circle, triangle, or cross.',
+        },
+        {
+          emoji: '🚶',
+          title: 'Tokyo travel buffers (beta)',
+          body: 'Attach a location to events in Greater Tokyo and Tsudoi estimates the travel time between them.',
+        },
       ],
       steps: [
-        { title: 'Connect your calendar', body: 'Sign in with Google so Tsudoi knows when not to suggest a slot.' },
-        { title: 'Stamp your routine', body: 'Block out work, class, and personal time with stamps.' },
-        { title: 'Share and confirm', body: 'Send the hangout link, collect responses, and write the result back automatically.' },
+        {
+          title: 'Connect your calendar',
+          body: 'Sign in with Google so Tsudoi knows when not to suggest a slot.',
+        },
+        {
+          title: 'Stamp your routine',
+          body: 'Block out work, class, and personal time with stamps.',
+        },
+        {
+          title: 'Share and confirm',
+          body: 'Send the hangout link, collect responses, and write the result back automatically.',
+        },
       ],
     },
     auth: {
@@ -587,7 +645,8 @@ export const translations = {
       failedSaveStamp: 'Failed to save stamp.',
       couldNotUndoPlacement: 'Could not undo placement.',
       failedToApplyStamp: 'Failed to apply stamp.',
-      failedToPlaceCount: (failed: number, total: number) => `Failed to place ${failed} of ${total}.`,
+      failedToPlaceCount: (failed: number, total: number) =>
+        `Failed to place ${failed} of ${total}.`,
       couldNotUndoPlacements: (failed: number) => `Could not undo ${failed} placement(s).`,
       undone: 'Undone.',
       eventDeleted: 'Event deleted successfully!',
@@ -599,7 +658,8 @@ export const translations = {
       addedPreset: (emoji: string, title: string) => `Added ${emoji} ${title}`,
       couldNotAddPreset: 'Could not add preset.',
       placedSingle: (emoji: string, title: string) => `Placed ${emoji} ${title}`,
-      placedMany: (count: number, emoji: string, title: string) => `Placed ${count} × ${emoji} ${title}`,
+      placedMany: (count: number, emoji: string, title: string) =>
+        `Placed ${count} × ${emoji} ${title}`,
       confirmDeletionTitle: 'Confirm Deletion',
       confirmDeletionMessage: 'Delete this event?',
       confirmDeletionConfirm: 'Delete',
@@ -611,6 +671,13 @@ export const translations = {
       publicRequestsIntroTitle: 'Create without an account',
       publicRequestsIntroBody:
         'This page uses a temporary public session so you can share a link and collect availability right away.',
+      statusOpen: 'Open',
+      statusUpdating: 'Updating',
+      statusResultsReady: 'Results ready',
+      statusNoSlots: 'No slots found',
+      statusConfirmed: 'Confirmed',
+      statusClosed: 'Closed',
+      targetNotDecided: '(target not decided)',
     },
     notifications: ja.notifications,
     google: ja.google,
@@ -659,7 +726,8 @@ export const translations = {
       requiredTimes: 'Start and End times are required for the stamp instance.',
       endAfterStart: 'Stamp instance End time must be after Start time.',
       requiredRepeatUntil: 'Please select a Repeat Until date for the recurring stamp.',
-      repeatUntilBeforeStart: "Repeat Until date cannot be before the stamp's effective start date.",
+      repeatUntilBeforeStart:
+        "Repeat Until date cannot be before the stamp's effective start date.",
       weekdayLabels: {
         SUN: 'Sun',
         MON: 'Mon',
@@ -676,6 +744,14 @@ export const translations = {
       ...ja.replyPage,
       publicFlowTitle: 'Public scheduling',
       publicFlowBody: 'No account is needed here. Enter your name and the times you are busy.',
+      findCommonSlots: 'Live results',
+      viewCalculatedSlots: 'View detailed results',
+      noSlotsBasedOnLatest: 'No common slots were found from the current responses.',
+      calculating: 'Updating...',
+      recalculateCommonTimes: 'Refresh results',
+      calculateNow: 'Show results now',
+      waitingForMoreParticipants: (remaining: number) =>
+        `Results will improve once ${remaining} more people respond.`,
     },
   },
 } as const;

@@ -1,38 +1,42 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '@/contexts/AuthContext';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ShareLinkPanel } from '@/components/hangouts/ShareLinkPanel';
 import { TsudoiRequestEditor } from '@/components/tsudoi/TsudoiRequestEditor';
-import { showErrorToast, showSuccessToast } from '@/lib/toasts';
-import { useCreateHangoutRequest } from '@/lib/queries/hangoutRequests';
-import { useLanguage } from '@/hooks/useLanguage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/hooks/useLanguage';
+import { useCreateHangoutRequest } from '@/lib/queries/hangoutRequests';
+import { showErrorToast, showSuccessToast } from '@/lib/toasts';
 import { HangoutRequestFormData } from '@/types/hangouts';
 
 const ORGANIZER_NAME_STORAGE_KEY = 'tsudoi.publicOrganizerName';
 
 const copy = {
   ja: {
+    loading: '読み込み中...',
     eyebrow: '候補を作成',
-    title: '週グリッドから候補を選び、回答リンクを発行する。',
+    title: '週グリッドから候補を選び、回答リンクを発行します。',
     body: '候補時間を選ぶと、参加者がアカウントなしで回答できる共有リンクを作成できます。',
     back: '一覧に戻る',
-    success: '調整を作成しました。',
+    success: 'リクエストを作成しました。',
     createBack: '一覧へ戻る',
-    signedOut: '候補を作成するにはサインインしてください。',
+    signedOut: 'リクエストを作成するにはサインインしてください。',
     createButton: 'サインイン',
     organizerName: '主催者名',
     organizerNameHelp: '回答ページの「作成者」として表示されます。',
-    organizerNamePlaceholder: '例: ゆき',
+    organizerNamePlaceholder: '例: Yuki',
     organizerNameRequired: '主催者名を入力してください。',
-    note: '候補を保存すると、共有リンクのコピー画面に進みます。回答が集まったら一覧から確定できます。',
+    note: '候補を保存すると共有リンクのコピー画面に進みます。回答が集まったら一覧から最終時間を確定できます。',
+    fallbackCreator: '匿名ユーザー',
+    createFailed: (message: string) => `リクエストの作成に失敗しました。${message}`,
   },
   en: {
+    loading: 'Loading...',
     eyebrow: 'Create candidate times',
     title: 'Pick slots from the weekly grid and publish a reply link.',
     body: 'Select candidate cells, save the request, and share a public link so participants can reply without an account.',
@@ -46,12 +50,17 @@ const copy = {
     organizerNamePlaceholder: 'Example: Yuki',
     organizerNameRequired: 'Please enter your organizer name.',
     note: 'After saving the candidate set, you will get a share link. Once replies come in, confirm the final time from the request list.',
+    fallbackCreator: 'Anonymous User',
+    createFailed: (message: string) => `Failed to create request. ${message}`,
   },
 } as const;
 
 export default function TsudoiRequestCreatePage() {
+  const { language } = useLanguage();
+  const content = copy[language] ?? copy.en;
+
   return (
-    <Suspense fallback={<div className="p-6 text-center text-stone-500">Loading...</div>}>
+    <Suspense fallback={<div className="p-6 text-center text-stone-500">{content.loading}</div>}>
       <TsudoiRequestCreatePageInner />
     </Suspense>
   );
@@ -60,7 +69,7 @@ export default function TsudoiRequestCreatePage() {
 function TsudoiRequestCreatePageInner() {
   const { user, loading: authLoading, isPublicSession, ensurePublicSession } = useAuth();
   const { language } = useLanguage();
-  const content = copy[language];
+  const content = copy[language] ?? copy.en;
   const router = useRouter();
   const searchParams = useSearchParams();
   const recipientUid = searchParams.get('recipient') ?? undefined;
@@ -98,7 +107,7 @@ function TsudoiRequestCreatePageInner() {
       try {
         const creatorName = isPublicSession
           ? trimmedOrganizerName
-          : user.displayName || user.email || 'Anonymous User';
+          : user.displayName || user.email || content.fallbackCreator;
 
         if (isPublicSession) {
           window.localStorage.setItem(ORGANIZER_NAME_STORAGE_KEY, trimmedOrganizerName);
@@ -113,24 +122,16 @@ function TsudoiRequestCreatePageInner() {
         showSuccessToast(content.success);
       } catch (error) {
         console.error('Failed to create Tsudoi request:', error);
-        showErrorToast(`Failed to create request. ${(error as Error).message}`);
+        showErrorToast(content.createFailed((error as Error).message));
       } finally {
         setIsSaving(false);
       }
     },
-    [
-      content.organizerNameRequired,
-      content.signedOut,
-      content.success,
-      createMutation,
-      isPublicSession,
-      organizerName,
-      user,
-    ],
+    [content, createMutation, isPublicSession, organizerName, user],
   );
 
   if (authLoading || isBootstrappingPublicSession || !user) {
-    return <div className="p-6 text-center text-stone-500">Loading...</div>;
+    return <div className="p-6 text-center text-stone-500">{content.loading}</div>;
   }
 
   if (!user) {

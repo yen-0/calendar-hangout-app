@@ -49,6 +49,46 @@ const responseViewCopy = {
   },
 } as const;
 
+const pageCopy = {
+  ja: {
+    signedInHelp:
+      '各候補を ○、△、× で回答してください。カレンダーの予定は自動入力されていますが、すべて変更できます。日付見出しで列全体、時刻見出しで行全体を切り替えられます。',
+    publicHelp: '名前を入力し、各候補を ○、△、× で回答してください。',
+    publicGridHelp:
+      '候補セルを押すと ○、△、× の順で切り替わります。日付見出しで列全体、時刻見出しで行全体を切り替えられます。',
+    liveResultsDescription: '参加者が回答すると、結果は自動で更新されます。',
+    noCandidateSlots: 'この Tsudoi には候補時間がありません。',
+    participantFallback: '参加者',
+    eventTitle: (requestName: string) => `Tsudoi: ${requestName}`,
+    confirmMessage: (
+      creatorName: string,
+      requestName: string,
+      date: string,
+      start: string,
+      end: string,
+    ) => `${creatorName} が「${requestName}」を ${date} ${start}〜${end} に確定しました。`,
+  },
+  en: {
+    signedInHelp:
+      'Mark each slot with circle, triangle, or cross. Calendar conflicts are prefilled, but you can change every answer. Press day headers to switch whole columns, or time labels to switch whole rows.',
+    publicHelp: 'Enter your name and mark each candidate with circle, triangle, or cross.',
+    publicGridHelp:
+      'Press a candidate cell to cycle through circle, triangle, and cross. Press day headers to switch whole columns, or time labels to switch whole rows.',
+    liveResultsDescription:
+      'Results update automatically as participants submit their availability.',
+    noCandidateSlots: 'No candidate slots are available for this Tsudoi.',
+    participantFallback: 'A Participant',
+    eventTitle: (requestName: string) => `Tsudoi: ${requestName}`,
+    confirmMessage: (
+      creatorName: string,
+      requestName: string,
+      date: string,
+      start: string,
+      end: string,
+    ) => `${creatorName} has confirmed "${requestName}" for ${date} from ${start} to ${end}.`,
+  },
+} as const;
+
 interface ResponseViewsProps {
   candidateSlots: NonNullable<HangoutRequestClientState['candidateSlots']>;
   responses: Record<string, SlotResponseStatus>;
@@ -89,6 +129,7 @@ function TsudoiResponseViews({
 export default function ReplyToHangoutRequestPage() {
   const { user, loading: authLoading, ensurePublicSession, isPublicSession } = useAuth();
   const { t, language } = useLanguage();
+  const content = pageCopy[language] ?? pageCopy.en;
   const params = useParams();
   const requestId = params?.requestId as string | undefined;
 
@@ -219,7 +260,7 @@ export default function ReplyToHangoutRequestPage() {
       );
       const newParticipant: ParticipantDataClient = {
         uid: user.uid,
-        displayName: user.displayName || user.email || 'A Participant',
+        displayName: user.displayName || user.email || content.participantFallback,
         submittedAt: new Date(),
         events: participantEvents,
         slotResponses:
@@ -235,7 +276,15 @@ export default function ReplyToHangoutRequestPage() {
     } finally {
       setIsSubmittingAvailability(false);
     }
-  }, [isPublicSession, request, slotResponses, syncLocalParticipant, t, user]);
+  }, [
+    content.participantFallback,
+    isPublicSession,
+    request,
+    slotResponses,
+    syncLocalParticipant,
+    t,
+    user,
+  ]);
 
   const handleSubmitPublicResponses = useCallback(async () => {
     if (!user || !request || !isPublicSession) {
@@ -325,7 +374,7 @@ export default function ReplyToHangoutRequestPage() {
         if (participantUid === user.uid && participantUid === request.creatorUid) {
           try {
             const creatorEvent: Omit<CalendarEvent, 'id'> = {
-              title: `Hangout: ${request.requestName}`,
+              title: content.eventTitle(request.requestName),
               start: slotStart,
               end: slotEnd,
               allDay: false,
@@ -340,7 +389,13 @@ export default function ReplyToHangoutRequestPage() {
           continue;
         }
         const notifRef = doc(collection(db, `userNotifications/${participantUid}/notifications`));
-        const message = `${request.creatorName} has confirmed "${request.requestName}" for ${format(slotStart, 'MMM d, yyyy')} from ${format(slotStart, 'hh:mm a')} to ${format(slotEnd, 'hh:mm a')}.`;
+        const message = content.confirmMessage(
+          request.creatorName,
+          request.requestName,
+          format(slotStart, 'MMM d, yyyy'),
+          format(slotStart, 'hh:mm a'),
+          format(slotEnd, 'hh:mm a'),
+        );
         batch.set(notifRef, {
           type: 'hangout_invitation',
           hangoutRequestId: request.id,
@@ -366,7 +421,7 @@ export default function ReplyToHangoutRequestPage() {
         try {
           const results = await writeHangoutToCalendars({
             hangoutRequestId: request.id,
-            title: `Hangout: ${request.requestName}`,
+            title: content.eventTitle(request.requestName),
             startISO: slotStart.toISOString(),
             endISO: slotEnd.toISOString(),
             participantUids: availableParticipants ?? [],
@@ -396,7 +451,7 @@ export default function ReplyToHangoutRequestPage() {
     } finally {
       setIsConfirmingSlot(false);
     }
-  }, [isPublicSession, request, slotToConfirm, t, user]);
+  }, [content, isPublicSession, request, slotToConfirm, t, user]);
 
   if (authLoading || isLoading) {
     return <div className="p-6 text-center text-gray-500">{t.replyPage.loading}</div>;
@@ -448,10 +503,7 @@ export default function ReplyToHangoutRequestPage() {
             </h2>
             {hasCandidateGrid && (
               <div className="mb-4">
-                <p className="mb-4 text-sm text-slate-500">
-                  Mark each slot with circle, triangle, or cross. Calendar conflicts are prefilled,
-                  but you can change every answer.
-                </p>
+                <p className="mb-4 text-sm text-slate-500">{content.signedInHelp}</p>
                 <TsudoiResponseViews
                   candidateSlots={request.candidateSlots ?? []}
                   responses={slotResponses}
@@ -491,9 +543,7 @@ export default function ReplyToHangoutRequestPage() {
           <h2 className="mb-2 text-xl font-semibold text-slate-700">
             {t.replyPage.yourParticipation}
           </h2>
-          <p className="mb-4 text-sm text-slate-500">
-            Enter your name and mark each candidate with circle, triangle, or cross.
-          </p>
+          <p className="mb-4 text-sm text-slate-500">{content.publicHelp}</p>
           <div className="mb-4 space-y-2">
             <Label htmlFor="publicDisplayName">{t.replyPage.displayNameLabel}</Label>
             <Input
@@ -504,9 +554,7 @@ export default function ReplyToHangoutRequestPage() {
             />
           </div>
           <div className="mb-4">
-            <p className="mb-4 text-sm text-slate-500">
-              Press a candidate cell to cycle through circle, triangle, and cross.
-            </p>
+            <p className="mb-4 text-sm text-slate-500">{content.publicGridHelp}</p>
             <TsudoiResponseViews
               candidateSlots={request.candidateSlots ?? []}
               responses={slotResponses}
@@ -537,9 +585,7 @@ export default function ReplyToHangoutRequestPage() {
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-slate-700">{t.replyPage.findCommonSlots}</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Results update automatically as participants submit their availability.
-            </p>
+            <p className="mt-1 text-sm text-slate-500">{content.liveResultsDescription}</p>
           </div>
         </div>
 
@@ -560,7 +606,7 @@ export default function ReplyToHangoutRequestPage() {
           </div>
         ) : (
           <p className="rounded-md bg-white px-6 py-4 text-center text-slate-500">
-            No candidate slots are available for this Tsudoi.
+            {content.noCandidateSlots}
           </p>
         )}
 

@@ -17,23 +17,28 @@ import { useLanguage } from '@/hooks/useLanguage';
 
 const copy = {
   ja: {
-    eyebrow: '公開調整',
-    title: '候補を送って、回答を集めて、予定を確定する。',
-    body: 'アカウントなしでも使える公開セッションです。参加者の空き時間を集め、候補の状態を確認できます。',
-    createPrimary: '調整を作成',
+    eyebrow: '公開日程調整',
+    title: '候補を送って、回答を集めて、予定を確定します。',
+    body: '参加者にアカウント作成を求めず、公開セッションで空き時間を集めてリクエストを管理できます。',
+    createPrimary: 'リクエストを作成',
     inviteSecondary: '友だちを招待',
-    summary: ['進行中', '確定済み', '終了'],
+    summary: ['受付中', '確定済み', '終了'],
     introTitle: '公開モードで利用中',
     introBody:
-      'このページでは一時的な公開セッションを使っています。リンクを共有して、すぐに回答を集められます。',
-    sectionTitle: '調整一覧',
+      'このページでは一時的な公開セッションを使います。リンクを共有すると、すぐに回答を集められます。',
+    sectionTitle: 'リクエスト一覧',
     loading: '読み込み中...',
-    signedOut: 'サインインすると自分の調整を管理できます。',
-    requestClosed: '調整を終了しました。',
-    requestDeleted: '調整を削除しました。',
+    signedOut: 'サインインすると自分のリクエストを管理できます。',
+    signInButton: 'サインイン',
+    requestClosed: 'リクエストを終了しました。',
+    requestDeleted: 'リクエストを削除しました。',
     shareCopied: 'リンクをコピーしました。',
+    clipboardUnavailable: 'このブラウザではクリップボードを使用できません。',
+    copyFailed: 'リンクのコピーに失敗しました。',
     createError: '公開セッションを開始できませんでした。',
-    deleteConfirmPrefix: 'この調整を削除しますか?',
+    closeFailed: 'リクエストの終了に失敗しました。',
+    deleteFailed: 'リクエストの削除に失敗しました。',
+    deleteConfirmPrefix: 'このリクエストを削除しますか?',
     deleteConfirmSuffix: 'この操作は元に戻せません。',
     confirmDelete: '削除',
   },
@@ -50,10 +55,15 @@ const copy = {
       'This page uses a temporary public session so you can share a link and collect availability right away.',
     loading: 'Loading...',
     signedOut: 'Sign in to manage your own requests.',
+    signInButton: 'Sign in',
     requestClosed: 'Request closed.',
     requestDeleted: 'Request deleted.',
     shareCopied: 'Link copied.',
+    clipboardUnavailable: 'Clipboard API not available.',
+    copyFailed: 'Failed to copy link.',
     createError: 'Could not start a public session.',
+    closeFailed: 'Failed to close the request.',
+    deleteFailed: 'Failed to delete the request.',
     deleteConfirmPrefix: 'Delete this request?',
     deleteConfirmSuffix: 'This cannot be undone.',
     confirmDelete: 'Delete',
@@ -96,23 +106,15 @@ export default function TsudoiPage() {
     (id: string) => {
       const link = `${window.location.origin}/tsudoi/reply/${id}`;
       if (!navigator.clipboard) {
-        showErrorToast(
-          language === 'ja'
-            ? 'このブラウザではクリップボードを使用できません。'
-            : 'Clipboard API not available.',
-        );
+        showErrorToast(content.clipboardUnavailable);
         return;
       }
       navigator.clipboard
         .writeText(link)
         .then(() => showInfoToast(content.shareCopied))
-        .catch(() =>
-          showErrorToast(
-            language === 'ja' ? 'リンクのコピーに失敗しました。' : 'Failed to copy link.',
-          ),
-        );
+        .catch(() => showErrorToast(content.copyFailed));
     },
-    [content.shareCopied, language],
+    [content.clipboardUnavailable, content.copyFailed, content.shareCopied],
   );
 
   const handleCloseOrArchive = useCallback(
@@ -122,8 +124,9 @@ export default function TsudoiPage() {
         !confirm(
           `${content.deleteConfirmPrefix} "${req.requestName}" ${content.deleteConfirmSuffix}`,
         )
-      )
+      ) {
         return;
+      }
       setIsProcessing(true);
       try {
         const { updateHangoutRequestDetails } = await import('@/lib/firebase/firestoreService');
@@ -132,20 +135,16 @@ export default function TsudoiPage() {
         await requestsQuery.refetch();
       } catch (err) {
         console.error('Failed to close:', err);
-        showErrorToast(
-          language === 'ja'
-            ? `調整の終了に失敗しました。${(err as Error).message}`
-            : `Failed to close the request. ${(err as Error).message}`,
-        );
+        showErrorToast(`${content.closeFailed} ${(err as Error).message}`);
       } finally {
         setIsProcessing(false);
       }
     },
     [
+      content.closeFailed,
       content.deleteConfirmPrefix,
       content.deleteConfirmSuffix,
       content.requestClosed,
-      language,
       requestsQuery,
       user,
     ],
@@ -161,15 +160,18 @@ export default function TsudoiPage() {
       await requestsQuery.refetch();
     } catch (err) {
       console.error('Failed to delete:', err);
-      showErrorToast(
-        language === 'ja'
-          ? `調整の削除に失敗しました。${(err as Error).message}`
-          : `Failed to delete the request. ${(err as Error).message}`,
-      );
+      showErrorToast(`${content.deleteFailed} ${(err as Error).message}`);
     } finally {
       setIsProcessing(false);
     }
-  }, [content.requestDeleted, deleteMutation, language, pendingDelete, requestsQuery, user]);
+  }, [
+    content.deleteFailed,
+    content.requestDeleted,
+    deleteMutation,
+    pendingDelete,
+    requestsQuery,
+    user,
+  ]);
 
   if (authLoading || (!user && !publicSessionError)) {
     return <div className="p-6 text-center text-stone-500">{content.loading}</div>;
@@ -189,7 +191,7 @@ export default function TsudoiPage() {
       <div className="p-6 text-center">
         <p className="mb-4">{content.signedOut}</p>
         <Link href="/sign-in">
-          <Button>Sign in</Button>
+          <Button>{content.signInButton}</Button>
         </Link>
       </div>
     );

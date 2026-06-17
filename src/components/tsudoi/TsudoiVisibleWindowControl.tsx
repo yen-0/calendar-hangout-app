@@ -30,6 +30,8 @@ const copy = {
     current: '現在の表示',
     showFrom: '開始時刻',
     showTo: '終了時刻',
+    cancel: 'キャンセル',
+    apply: '適用',
     trigger: (label: string) => `表示範囲: ${label}`,
   },
   en: {
@@ -39,6 +41,8 @@ const copy = {
     current: 'Current preview',
     showFrom: 'Show from',
     showTo: 'Show to',
+    cancel: 'Cancel',
+    apply: 'Apply',
     trigger: (label: string) => `Visible time range: ${label}`,
   },
 } as const;
@@ -185,14 +189,14 @@ export function TsudoiVisibleWindowControl({
 
           <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
-              Cancel
+              {content.cancel}
             </Button>
             <Button
               type="button"
               className="bg-cyan-600 text-white hover:bg-cyan-700"
               onClick={applyDraft}
             >
-              Apply
+              {content.apply}
             </Button>
           </div>
         </div>

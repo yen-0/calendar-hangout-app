@@ -5,7 +5,6 @@ import { format } from 'date-fns';
 import { HangoutRequestClientState } from '@/types/hangouts';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getHangoutStatusLabel } from '@/utils/hangoutUtils';
 
 interface Props {
   request: HangoutRequestClientState;
@@ -28,11 +27,21 @@ export function HangoutRequestCard({
 }: Props) {
   const participantCount = Object.keys(request.participants || {}).length;
   const memberTarget =
-    request.desiredMemberCount > 0 ? `${participantCount} / ${request.desiredMemberCount}` : `${participantCount}`;
+    request.desiredMemberCount > 0
+      ? `${participantCount} / ${request.desiredMemberCount}`
+      : `${participantCount}`;
   const { t } = useLanguage();
   const showCreatorActions = isCreator && request.status !== 'closed';
   const allowEditDelete = request.status !== 'confirmed';
-  const statusLabel = getHangoutStatusLabel(request.status);
+  const statusLabels = {
+    pending: t.hangouts.statusOpen,
+    pending_calculation: t.hangouts.statusUpdating,
+    results_ready: t.hangouts.statusResultsReady,
+    no_slots_found: t.hangouts.statusNoSlots,
+    confirmed: t.hangouts.statusConfirmed,
+    closed: t.hangouts.statusClosed,
+  } as const;
+  const statusLabel = statusLabels[request.status] ?? statusLabels.pending;
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 shadow">
@@ -49,7 +58,7 @@ export function HangoutRequestCard({
           </p>
           <p className="text-xs text-gray-500">
             {t.hangouts.participants}: {memberTarget}
-            {request.desiredMemberCount <= 0 ? ' (not decided)' : ''}
+            {request.desiredMemberCount <= 0 ? ` ${t.hangouts.targetNotDecided}` : ''}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => onCopyShareLink(request.id)}>
@@ -60,15 +69,30 @@ export function HangoutRequestCard({
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3">
           {allowEditDelete && (
             <>
-              <Button variant="outline" size="sm" onClick={() => onEdit(request)} disabled={isProcessing}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onEdit(request)}
+                disabled={isProcessing}
+              >
                 {t.hangouts.edit}
               </Button>
-              <Button variant="destructive" size="sm" onClick={() => onDelete(request)} disabled={isProcessing}>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => onDelete(request)}
+                disabled={isProcessing}
+              >
                 {t.hangouts.delete}
               </Button>
             </>
           )}
-          <Button variant="secondary" size="sm" onClick={() => onCloseOrArchive(request)} disabled={isProcessing}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onCloseOrArchive(request)}
+            disabled={isProcessing}
+          >
             {request.status === 'confirmed' ? t.hangouts.archiveDone : t.hangouts.closeRequest}
           </Button>
         </div>
@@ -76,4 +100,3 @@ export function HangoutRequestCard({
     </div>
   );
 }
-
