@@ -43,6 +43,12 @@ const copy = {
   },
 } as const;
 
+const RESULT_MARKS = {
+  yes: '\u25cb',
+  maybe: '\u25b3',
+  no: '\u00d7',
+} as const;
+
 function getResultCellClass({
   yesCount,
   maybeCount,
@@ -165,11 +171,11 @@ export function TsudoiLiveResultsGrid({
     const cellContent = hasParticipants ? (
       <>
         <span className="text-sm font-semibold">{breakdown.yesCount}</span>
-        <span className="text-[11px] text-emerald-700">yes</span>
+        <span className="text-sm font-semibold text-emerald-700">{RESULT_MARKS.yes}</span>
         <span className="text-sm font-semibold">{breakdown.maybeCount}</span>
-        <span className="text-[11px] text-amber-700">maybe</span>
+        <span className="text-sm font-semibold text-amber-700">{RESULT_MARKS.maybe}</span>
         <span className="text-sm font-semibold">{breakdown.noCount}</span>
-        <span className="text-[11px] text-rose-700">no</span>
+        <span className="text-sm font-semibold text-rose-700">{RESULT_MARKS.no}</span>
       </>
     ) : (
       <span className="col-span-6 text-xs text-slate-400">{content.noResponses}</span>
@@ -188,7 +194,7 @@ export function TsudoiLiveResultsGrid({
       return (
         <button
           type="button"
-          aria-label={`Select ${slotLabel}`}
+          aria-label={`Confirm ${slotLabel}`}
           className={className}
           onClick={() => onSelectCommonSlot(commonSlotIndex)}
         >

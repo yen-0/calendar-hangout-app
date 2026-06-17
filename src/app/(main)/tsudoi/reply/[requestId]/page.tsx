@@ -12,8 +12,6 @@ import { Label } from '@/components/ui/label';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import { HangoutDetailsCard } from '@/components/hangouts/HangoutDetailsCard';
 import { ConfirmedSlotBanner } from '@/components/hangouts/ConfirmedSlotBanner';
-import { CommonSlotsModal } from '@/components/hangouts/CommonSlotsModal';
-import { TsudoiResponseGrid } from '@/components/tsudoi/TsudoiResponseGrid';
 import { TsudoiLiveResultsGrid } from '@/components/tsudoi/TsudoiLiveResultsGrid';
 import { TsudoiWeeklyResponseGrid } from '@/components/tsudoi/TsudoiWeeklyResponseGrid';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -44,15 +42,10 @@ const responseViewCopy = {
     weeklyGridTitle: '\u9031\u30b0\u30ea\u30c3\u30c9',
     weeklyGridBody:
       '\u9031\u306e\u5019\u88dc\u3092\u898b\u306a\u304c\u3089\u3001\u6642\u9593\u5e2f\u3054\u3068\u306b\u56de\u7b54\u3067\u304d\u307e\u3059\u3002',
-    listViewTitle: '\u30ea\u30b9\u30c8\u30d3\u30e5\u30fc',
-    listViewBody:
-      '\u5019\u88dc\u3092\u65e5\u4ed8\u9806\u306e\u4e00\u89a7\u3067\u78ba\u8a8d\u3057\u3066\u30011\u4ef6\u305a\u3064\u56de\u7b54\u3067\u304d\u307e\u3059\u3002',
   },
   en: {
     weeklyGridTitle: 'Weekly grid',
     weeklyGridBody: 'Review the candidate week and answer by time block.',
-    listViewTitle: 'List view',
-    listViewBody: 'Review candidates as a chronological list and answer one by one.',
   },
 } as const;
 
@@ -89,21 +82,6 @@ function TsudoiResponseViews({
           onChange={onChange}
         />
       </section>
-
-      <section className="space-y-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-800">{content.listViewTitle}</h3>
-            <p className="text-sm text-slate-500">{content.listViewBody}</p>
-          </div>
-        </div>
-        <TsudoiResponseGrid
-          candidateSlots={candidateSlots}
-          responses={responses}
-          isLoading={isLoading}
-          onChange={onChange}
-        />
-      </section>
     </div>
   );
 }
@@ -119,8 +97,6 @@ export default function ReplyToHangoutRequestPage() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [isSubmittingAvailability, setIsSubmittingAvailability] = useState(false);
   const [hasUserAlreadySubmitted, setHasUserAlreadySubmitted] = useState(false);
-  const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
-  const [selectedFinalSlotIndex, setSelectedFinalSlotIndex] = useState<number | null>(null);
   const [isConfirmingSlot, setIsConfirmingSlot] = useState(false);
   const [slotToConfirm, setSlotToConfirm] = useState<CommonSlotClient | null>(null);
   const [slotResponses, setSlotResponses] = useState<Record<string, SlotResponseStatus>>({});
@@ -292,17 +268,32 @@ export default function ReplyToHangoutRequestPage() {
     }
   }, [isPublicSession, publicDisplayName, request, slotResponses, syncLocalParticipant, t, user]);
 
-  const handleInitiateConfirm = useCallback(() => {
-    if (!request || selectedFinalSlotIndex === null || !liveCommonSlots[selectedFinalSlotIndex]) {
-      showErrorToast(t.replyPage.invalidSlot);
-      return;
-    }
-    if (!user || user.uid !== request.creatorUid) {
-      showErrorToast(t.replyPage.onlyCreator);
-      return;
-    }
-    setSlotToConfirm(liveCommonSlots[selectedFinalSlotIndex]);
-  }, [liveCommonSlots, request, selectedFinalSlotIndex, t, user]);
+  const handleInitiateConfirm = useCallback(
+    (slot: CommonSlotClient) => {
+      if (!request) {
+        showErrorToast(t.replyPage.invalidSlot);
+        return;
+      }
+      if (!user || user.uid !== request.creatorUid) {
+        showErrorToast(t.replyPage.onlyCreator);
+        return;
+      }
+      setSlotToConfirm(slot);
+    },
+    [request, t.replyPage.invalidSlot, t.replyPage.onlyCreator, user],
+  );
+
+  const handleSelectCommonSlot = useCallback(
+    (index: number) => {
+      const slot = liveCommonSlots[index];
+      if (!slot) {
+        showErrorToast(t.replyPage.invalidSlot);
+        return;
+      }
+      handleInitiateConfirm(slot);
+    },
+    [handleInitiateConfirm, liveCommonSlots, t.replyPage.invalidSlot],
+  );
 
   const handleConfirmAndInvite = useCallback(async () => {
     if (!request || !slotToConfirm || !user) {
@@ -370,8 +361,6 @@ export default function ReplyToHangoutRequestPage() {
           ? { ...prev, status: 'confirmed', finalSelectedSlot: { start: slotStart, end: slotEnd } }
           : null,
       );
-      setIsResultsModalOpen(false);
-      setSelectedFinalSlotIndex(null);
 
       if (user && !isPublicSession) {
         try {
@@ -552,15 +541,6 @@ export default function ReplyToHangoutRequestPage() {
               Results update automatically as participants submit their availability.
             </p>
           </div>
-          {canManageResults && liveCommonSlots.length > 0 && (
-            <Button
-              onClick={() => setIsResultsModalOpen(true)}
-              variant="solid"
-              className="bg-green-600 text-white hover:bg-green-700"
-            >
-              {t.replyPage.viewCalculatedSlots}
-            </Button>
-          )}
         </div>
 
         {hasCandidateGrid ? (
@@ -569,25 +549,13 @@ export default function ReplyToHangoutRequestPage() {
               candidateSlots={request.candidateSlots ?? []}
               commonSlots={liveCommonSlots}
               participants={request.participants ?? {}}
-              canSelect={canManageResults}
-              onSelectCommonSlot={(index) => {
-                setSelectedFinalSlotIndex(index);
-                setIsResultsModalOpen(true);
-              }}
+              canSelect={canManageResults && isCreator}
+              onSelectCommonSlot={handleSelectCommonSlot}
             />
             {liveCommonSlots.length === 0 && (
               <p className="rounded-md bg-white px-6 py-4 text-center text-slate-500">
                 {t.replyPage.noSlotsBasedOnLatest}
               </p>
-            )}
-            {canManageResults && liveCommonSlots.length > 0 && (
-              <Button
-                onClick={() => setIsResultsModalOpen(true)}
-                variant="outline"
-                className="w-full border-slate-300 hover:bg-slate-100"
-              >
-                Review and confirm a slot
-              </Button>
             )}
           </div>
         ) : (
@@ -615,24 +583,6 @@ export default function ReplyToHangoutRequestPage() {
           </Button>
         </Link>
       </footer>
-
-      {canManageResults && (
-        <CommonSlotsModal
-          isOpen={isResultsModalOpen}
-          onClose={() => {
-            setIsResultsModalOpen(false);
-            setSelectedFinalSlotIndex(null);
-          }}
-          request={request}
-          slots={liveCommonSlots}
-          participants={request.participants ?? {}}
-          selectedIndex={selectedFinalSlotIndex}
-          setSelectedIndex={setSelectedFinalSlotIndex}
-          isCreator={isCreator}
-          isConfirming={isConfirmingSlot}
-          onConfirm={handleInitiateConfirm}
-        />
-      )}
 
       {slotToConfirm && (
         <ConfirmationModal
