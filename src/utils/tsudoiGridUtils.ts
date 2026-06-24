@@ -1,4 +1,4 @@
-import { addMinutes, format, startOfDay } from 'date-fns';
+import { addMinutes, format, isSameDay, startOfDay } from 'date-fns';
 import { CandidateSlotClient } from '@/types/hangouts';
 
 export const TSUDOI_DEFAULT_VISIBLE_START_MINUTES = 9 * 60;
@@ -113,7 +113,11 @@ export function getSmartTsudoiVisibleWindow(
     ...candidateSlots.map((slot) => slot.start.getHours() * 60 + slot.start.getMinutes()),
   );
   const latestEnd = Math.max(
-    ...candidateSlots.map((slot) => slot.end.getHours() * 60 + slot.end.getMinutes()),
+    ...candidateSlots.map((slot) =>
+      isSameDay(slot.start, slot.end)
+        ? slot.end.getHours() * 60 + slot.end.getMinutes()
+        : TSUDOI_FULL_DAY_MINUTES,
+    ),
   );
 
   return {

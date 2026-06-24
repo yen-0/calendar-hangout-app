@@ -42,6 +42,20 @@ describe('tsudoiGridUtils', () => {
     });
   });
 
+  it('treats slots that end at midnight as extending to 24:00', () => {
+    expect(
+      getSmartTsudoiVisibleWindow([
+        {
+          start: new Date('2026-05-29T23:00:00'),
+          end: new Date('2026-05-30T00:00:00'),
+        },
+      ]),
+    ).toEqual({
+      startMinutes: TSUDOI_DEFAULT_VISIBLE_START_MINUTES,
+      endMinutes: 24 * 60,
+    });
+  });
+
   it('normalizes the visible window to the current grid step', () => {
     expect(
       normalizeTsudoiVisibleWindow(
